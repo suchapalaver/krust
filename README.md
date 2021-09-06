@@ -1,4 +1,4 @@
-To make use of k-rust's multithreaded cocurrency test with the larger fasta data, which, be warned, is larger than github's recommended upload size. 
+To make use of k-rust's multithreaded cocurrency test with the larger fasta data with multiple records.
 
 Run k-rust on the test data, searching for kmers of length 5, like this:
 
