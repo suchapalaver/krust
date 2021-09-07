@@ -4,7 +4,7 @@ use std::{
     fs::{self, File},
     io::Write,
     path::Path,
-    str, thread,
+    str
 };
 
 extern crate bio;
@@ -35,6 +35,7 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    
     fs::create_dir("output")?;
 
     let filepath: String = config.filepath;
@@ -43,11 +44,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let reader = fasta::Reader::from_file(&filepath).unwrap();
 
-    //let mut threads = Vec::new();
-
-    reader.records().into_iter().for_each(|result| {
+    reader.records().into_par_iter().for_each(|result| {
 	
-        let result_data = &result.unwrap();
+        let result_data = result.unwrap();
 
         let pathname = format!("output/{}.tsv", result_data.id());
 
