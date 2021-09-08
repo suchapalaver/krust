@@ -49,7 +49,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let reader = fasta::Reader::from_file(&filepath).unwrap();
 
-    reader.records().into_iter().par_bridge().for_each(|result| {
+    reader.records().par_bridge().for_each(|result| {
 	
         let result_data = result.as_ref().unwrap();
 
