@@ -19,17 +19,19 @@ pub struct Config {
     pub filepath: String,
 }
 
-use std::time::Instant;
-
 impl Config {
+    
     pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
+	
         args.next();
 
         let kmer_len = match args.next() {
+	    
             Some(arg) => arg,
             None => return Err("Didn't get a k-mer length"),
         };
         let filepath = match args.next() {
+	    
             Some(arg) => arg,
             None => return Err("Didn't get a file name"),
         };
@@ -38,7 +40,6 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let start = Instant::now();
     
     fs::create_dir("output")?;
 
@@ -61,17 +62,22 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         let display = path.display();
 
         let mut file = match File::create(&path) {
+	    
             Err(why) => panic!("couldn't create {}: {}", display, why),
             Ok(file) => file,
         };
         for (kmer, kmer_positions) in hash_kmers(result_data.seq(), kmer_len) {
+	    
             let rvc = revcomp(kmer);
 
             match str::from_utf8(kmer) {
+		
                 Err(e) => println!("Problem: {}", e),
                 Ok(kmer_s) => match str::from_utf8(&rvc) {
-                    Ok(rvc) => {
-                        let data = format!("{}\t{}\t{}\n", kmer_s, rvc, kmer_positions.len());
+
+		    Ok(rvc) => {
+
+			let data = format!("{}\t{}\t{}\n", kmer_s, rvc, kmer_positions.len());
                         write!(file, "{}", data).expect("Unable to write file");
                     }
                     Err(why) => panic!("couldn't write to {}: {}", display, why),
@@ -79,7 +85,5 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
         }
     });
-    let duration = start.elapsed();
-    println!("Time elapsed is: {:?}", duration);
     Ok(println!("{}", filepath))
 }
