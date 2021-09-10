@@ -12,9 +12,9 @@ or, searching for kmers of length 21 across multiple records:
 
 Branches are variations in implementation:
 
--- main uses rayon's ParallelBridge (https://docs.rs/rayon/1.5.1/rayon/iter/trait.ParallelBridge.html) 
+-- main uses rayon's parallel iterator by collecting the rust-bio fasta Reader into a vector
 
--- collect_the_iterator uses rayon's parallel iterator by collecting the rust-bio fasta Reader into a vector
+-- ParallelBridge uses rayon's ParallelBridge (https://docs.rs/rayon/1.5.1/rayon/iter/trait.ParallelBridge.html) (This seems to be slightly slower than collecting and using par_iter)
 
 -- std_threads uses Rust's standard library thread to process in parallel
 
