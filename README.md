@@ -10,7 +10,7 @@ or, searching for kmers of length 21 across multiple records:
 	
 
 
-Branches are Variations in Implementation:
+Branches are variations in implementation:
 
 -- main uses rayon's ParallelBridge (https://docs.rs/rayon/1.5.1/rayon/iter/trait.ParallelBridge.html) 
 
