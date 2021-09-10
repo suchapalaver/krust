@@ -18,4 +18,4 @@ Branches are variations in implementation:
 
 -- std_threads uses Rust's standard library thread to process in parallel
 
--- single-thread has no parallel processing
+-- single_thread has no parallel processing
