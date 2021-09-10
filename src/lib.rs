@@ -15,6 +15,10 @@ extern crate rayon;
 use rayon::{iter::ParallelBridge,
 	    prelude::ParallelIterator
 };
+use std::time::{Duration,
+		Instant
+};
+
 pub struct Config {
     pub kmer_len: String,
     pub filepath: String,
@@ -39,6 +43,7 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let start = Instant::now();
     
     fs::create_dir("output")?;
 
@@ -83,6 +88,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
         }
     });
-
+    let duration = start.elapsed();
+    println!("Time elapsed in expensive_function() is: {:?}", duration);
     Ok(println!("{}", filepath))
 }
