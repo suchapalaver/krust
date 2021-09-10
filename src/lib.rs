@@ -6,16 +6,15 @@ use std::{
     path::Path,
     str
 };
-
 extern crate bio;
 use bio::{alignment::sparse::hash_kmers,
 	  alphabets::dna::revcomp,
-	  io::fasta};
-
+	  io::fasta
+};
 extern crate rayon;
-use rayon::iter::ParallelBridge;
-use rayon::prelude::ParallelIterator;
-
+use rayon::{iter::ParallelBridge,
+	    prelude::ParallelIterator
+};
 pub struct Config {
     pub kmer_len: String,
     pub filepath: String,
