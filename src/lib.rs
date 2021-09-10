@@ -89,6 +89,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
     let duration = start.elapsed();
-    println!("Time elapsed in expensive_function() is: {:?}", duration);
+    println!("Time elapsed is: {:?}", duration);
     Ok(println!("{}", filepath))
 }
