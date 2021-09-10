@@ -19,6 +19,8 @@ pub struct Config {
     pub filepath: String,
 }
 
+use std::time::Instant;
+
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
         args.next();
@@ -36,6 +38,7 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let start = Instant::now();
     
     fs::create_dir("output")?;
 
@@ -76,6 +79,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
         }
     });
-
+    let duration = start.elapsed();
+    println!("Time elapsed is: {:?}", duration);
     Ok(println!("{}", filepath))
 }
