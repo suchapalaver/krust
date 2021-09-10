@@ -15,9 +15,7 @@ extern crate rayon;
 use rayon::{iter::ParallelBridge,
 	    prelude::ParallelIterator
 };
-use std::time::{Duration,
-		Instant
-};
+use std::time::Instant;
 
 pub struct Config {
     pub kmer_len: String,
