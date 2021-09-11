@@ -10,7 +10,7 @@ use std::{
 };
 
 pub struct Config {
-    pub kmer_len: String,
+    pub kmer_len: usize,
     pub filepath: String,
 }
 
@@ -19,7 +19,7 @@ impl Config {
         args.next();
 
         let kmer_len = match args.next() {
-            Some(arg) => arg,
+            Some(arg) => arg.parse().unwrap(),
             None => return Err("Didn't get a k-mer length"),
         };
         let filepath = match args.next() {
@@ -35,7 +35,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let filepath: String = config.filepath;
 
-    let kmer_len = config.kmer_len.parse::<usize>().unwrap();
+    let kmer_len = config.kmer_len;
 
     let reader = fasta::Reader::from_file(&filepath).unwrap();
 
