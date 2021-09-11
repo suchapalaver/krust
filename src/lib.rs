@@ -20,7 +20,7 @@ impl Config {
 
         let kmer_len = match args.next() {
             Some(arg) => arg.parse().unwrap(),
-            None => return Err("Didn't get a k-mer length"),
+            None => return Err("Problem with k-mer length input"),
         };
         let filepath = match args.next() {
             Some(arg) => arg,
@@ -35,40 +35,29 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let filepath: String = config.filepath;
 
-    let kmer_len = config.kmer_len;
+    let kmer_len: usize = config.kmer_len;
 
-    let reader = fasta::Reader::from_file(&filepath).unwrap();
+    let reader: fasta::Reader<std::io::BufReader<File>> =
+        fasta::Reader::from_file(&filepath).unwrap();
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
 
     fasta_records.par_iter().for_each(|result| {
-        let result_data = result.as_ref().unwrap();
+        let result_data: &fasta::Record = result.as_ref().unwrap();
 
-        let pathname = format!("output/{}.tsv", result_data.id());
+        let pathname: String = format!("output/{}.tsv", result_data.id());
 
-        let path = Path::new(&pathname);
+        let path: &Path = Path::new(&pathname);
 
-        let display = path.display();
-
-        let mut file = match File::create(&path) {
-            Err(why) => panic!("couldn't create {}: {}", display, why),
-            Ok(file) => file,
-        };
+        let mut file: File = File::create(&path).expect("Couldn't create a file");
 
         for (kmer, kmer_positions) in hash_kmers(result_data.seq(), kmer_len) {
-            let rvc = revcomp(kmer);
+            let kmer_s: String = kmer.iter().map(|c| *c as char).collect::<String>();
 
-            match str::from_utf8(kmer) {
-                Err(e) => println!("Problem: {}", e),
-                Ok(kmer_s) => match str::from_utf8(&rvc) {
-                    Err(why) => panic!("couldn't write to {}: {}", display, why),
+	    let rvc: String = revcomp(kmer).iter().map(|c| *c as char).collect::<String>();
 
-                    Ok(rvc) => {
-                        let data = format!("{}\t{}\t{}\n", kmer_s, rvc, kmer_positions.len());
-                        write!(file, "{}", data).expect("Unable to write file");
-                    }
-                },
-            }
+            write!(file, "{}\t{}\t{}\n", kmer_s, rvc, kmer_positions.len())
+                .expect("Unable to write file");
         }
     });
     Ok(println!("{}", filepath))
