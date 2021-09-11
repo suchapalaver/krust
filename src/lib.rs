@@ -6,9 +6,9 @@ use std::{
     path::Path,
     str,
 };
-extern crate bio;
+
 use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
-extern crate rayon;
+
 use rayon::prelude::*;
 
 pub struct Config {
