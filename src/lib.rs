@@ -1,3 +1,5 @@
+use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
+use rayon::prelude::*;
 use std::{
     env,
     error::Error,
@@ -6,10 +8,6 @@ use std::{
     path::Path,
     str,
 };
-
-use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
-
-use rayon::prelude::*;
 
 pub struct Config {
     pub kmer_len: String,
