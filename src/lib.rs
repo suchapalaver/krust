@@ -10,15 +10,13 @@ pub struct Config {
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
         args.next();
-
-        let kmer_len = match args.next() {
+	
+	let kmer_len = match args.next() {
             Some(arg) => arg.parse().unwrap(),
             None => return Err("Problem with k-mer length input"),
         };
-        let filepath = match args.next() {
-            Some(arg) => arg,
-            None => return Err("Didn't get a file name"),
-        };
+        let filepath = args.next().unwrap();
+	
         Ok(Config { kmer_len, filepath })
     }
 }
