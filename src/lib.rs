@@ -1,6 +1,6 @@
 use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
 use rayon::prelude::*;
-use std::{collections::HashMap, env, error::Error, fs::File, io::Write, str, time::Instant};
+use std::{collections::{HashMap, HashSet}, env, error::Error, fs::File, io::Write, str, time::Instant};
 
 pub struct Config {
     pub kmer_len: usize,
@@ -31,7 +31,7 @@ pub fn hash_fasta_rec(
 
     let mut new_hashmap = HashMap::new();
 
-    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) {
+    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) { // rust-bio's hash_kmers function, returns iterator of tuples (&[u8], Vec<u32>), the Vec being a list of indices of positions of kmer. 
         new_hashmap.insert(kmer, kmer_pos.len());
     }
     new_hashmap
@@ -49,19 +49,36 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
 
-    let hash_vec: Vec<HashMap<&[u8], usize>> = fasta_records
+    let mut hash_vec: Vec<HashMap<&[u8], usize>> = fasta_records
         .par_iter()
         .map(|result| hash_fasta_rec(result, k))
         .collect();
-
+    
     let hash_duration = start.elapsed();
 
     eprintln!(
         "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
         hash_duration
     );
+    // merging hashmaps
+    //eprintln!("length of hash_vec now: {}", hash_vec.len());
+    
+    let mut hash_len_vec = HashSet::new(); // create set of number of kmers 
+    
+    for h in &hash_vec {
+	hash_len_vec.insert(h.len());
+    }
+    //eprintln!("hashmap lengths: {:?}", hash_len_vec);
 
-    let mut final_hash = HashMap::new();
+    let longest_len = hash_len_vec.iter().max().unwrap();
+    
+    let i = &hash_vec.iter().position(|h| h.len() == *longest_len).unwrap();
+
+    let mut final_hash = hash_vec.remove(*i);
+
+    //eprintln!("this is the hash we're basing off: {:?}", final_hash);
+
+    //eprintln!("length of hash_vec post removal: {}", hash_vec.len());
 
     hash_vec.into_iter().for_each(|h| {
         for (kmer, freq) in h {
