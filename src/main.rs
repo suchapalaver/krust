@@ -1,4 +1,4 @@
-use kmer_basic::Config;
+use krust::Config;
 use std::env;
 use std::process;
 
@@ -11,7 +11,7 @@ fn main() {
     eprintln!("\nSearching for kmers of length {}", config.kmer_len);
     eprintln!("... in file {}\n", config.filepath);
 
-    if let Err(e) = kmer_basic::run(config) {
+    if let Err(e) = krust::run(config) {
         eprintln!("Application error: {}", e);
         process::exit(1);
     }
