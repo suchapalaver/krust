@@ -90,7 +90,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             let mut lck = stdout_ref.lock();
 
-            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't create a file");
+            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
         }
     });
     let duration = start.elapsed();
