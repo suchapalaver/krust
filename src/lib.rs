@@ -80,15 +80,18 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let stdout_ref = &std::io::stdout();
 
     final_hash.par_iter().for_each(|(k, f)| {
-        let rvc = revcomp(*k);
-
         let kmer = str::from_utf8(k).unwrap();
 
-        let rvc = str::from_utf8(&rvc).unwrap();
+        if kmer.contains("N") {
+        } else {
+            let rvc = revcomp(*k);
 
-        let mut lck = stdout_ref.lock();
+            let rvc = str::from_utf8(&rvc).unwrap();
 
-        writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't create a file");
+            let mut lck = stdout_ref.lock();
+
+            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't create a file");
+        }
     });
     let duration = start.elapsed();
 
