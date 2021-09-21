@@ -1,6 +1,8 @@
 use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
 use itertools::Itertools;
 use rayon::prelude::*;
+use rayon::iter::ParallelBridge;
+use rayon::prelude::ParallelIterator;
 use reduce::Reduce;
 //use rustc_hash::FxHashMap; //  Check Stack Overflow for suggestions
 use std::{collections::{HashMap, HashSet}, env, error::Error, fs::File, io::Write, str, time::Instant};
@@ -98,54 +100,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
         hash_duration
     );
-    // merging hashmaps
-    //eprintln!("length of hash_vec now: {}", hash_vec.len());
     
-//  Idea was to find the longest map and somehow make that the base for comparison but scrapping for now...
+    // MERGING HASHMAPS
     /*
-    let mut hash_len_vec = HashSet::new(); // create set of number of kmers 
-    
-    for h in &hash_vec {
-	hash_len_vec.insert(h.len());
-    }
-    //eprintln!("hashmap lengths: {:?}", hash_len_vec);
-
-    let longest_len = hash_len_vec.iter().max().unwrap();
-    
-    let i = &hash_vec.iter().position(|h| h.len() == *longest_len).unwrap();
-
-    let mut final_hash = hash_vec.remove(*i);
-
-    //eprintln!("this is the hash we're basing off: {:?}", final_hash);
-
-    //eprintln!("length of hash_vec post removal: {}", hash_vec.len());
-     */
-    
-/*
-    let pair_hash = hash_vec.clone();
-    
-    let mut pairing_hash: HashMap<&[u8], usize> = HashMap::new();
-    
-    for pair in &pair_hash.into_iter().chunks(2) {
-	for p in pair {
-	    eprintln!("p.len(): {}", p.len());
-	    if pairing_hash.is_empty() {
-		let pairing_hash = p;
-		continue;
-	    } else {
-		for (kmer, freq) in p {
-		    if pairing_hash.contains_key(kmer) {
-			pairing_hash.insert(kmer, freq + pairing_hash[kmer]);
-		    } else {
-			pairing_hash.insert(kmer, freq);
-		    }
-		}
-	    }
-	}
-    }
-    eprintln!("{}", pairing_hash.len());
-     */
-    /*
+    // THIS WORKS
     hash_vec.into_iter().for_each(|h| {
         for (kmer, freq) in h {
             if final_hash.contains_key(kmer) {
@@ -156,11 +114,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
      */
-    
-
     eprintln!("number of hashmaps in vec: {}", hash_vec.len());
-
-    //let mut final_hash = HashMap::new();
 
     let final_hash: HashMap<&[u8], usize> = Reduce::reduce(hash_vec.into_iter(), |mut ha, hb| {
 	    for (kmer, freq) in hb {
@@ -172,21 +126,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
 	ha
     }).unwrap();
-    
-    //let merged: HashMap<K, V> = HashMap::new();
-	
-	/*
-	    for (kmer, freq) in pair {
-		if merged.contains_key(kmer) {
-                    merged.insert(kmer, freq + merged[kmer]);
-		} else {
-                    merged.insert(kmer, freq);
-		}
-            }
-	}
-    };
-    */
-    
+    // END OF MERGING
     let uniq_duration = start.elapsed();
 
     eprintln!("Time elapsed merging hashmaps: {:?}\n", uniq_duration);
