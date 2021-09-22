@@ -2,7 +2,7 @@ use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
 use fxhash::FxHashMap; // Stack O suggestions
 use rayon::prelude::*;
 use rayon::iter::ParallelBridge;
-use std::{collections::HashMap, env, error::Error, fs::File, io::Write, str, time::Instant};
+use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
 use dashmap::DashMap;
 
 pub struct Config {
@@ -30,12 +30,12 @@ pub fn hash_fasta_rec(
 ) -> FxHashMap<&[u8], usize> {
     let result_data: &fasta::Record = result.as_ref().unwrap();
 
-    let mut new_hashmap = fxhash::FxHashMap::default();
+    let mut seq_map = FxHashMap::default();
 
-    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) { // rust-bio's hash_kmers function, returns iterator of tuples (&[u8], Vec<u32>), the Vec being a list of indices of positions of kmer. 
-        new_hashmap.insert(kmer, kmer_pos.len());
+    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) { // the Vec<u32> that hash_kmers (rust-bio) is a list of indices of kmer's positions in seq. 
+        seq_map.insert(kmer, kmer_pos.len());
     }
-    new_hashmap
+    seq_map
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
@@ -49,35 +49,25 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
+
+    eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
     
     let hash_vec: Vec<FxHashMap<&[u8], usize>> = fasta_records
-        .par_iter() //  Where you use par_iter(), instead of using map try using fold then reduce. With rayon, fold will let you merge the data into HashMaps in parallel. Then reduce will take those maps and let you merge them into a single one. If you want to avoid the Vec altogether, you should be able to call par_bridge directly on the records() result instead of calling collect (then call fold and reduce). par_bridge creates a parallel iterator from a regular iterator.
+        .par_iter() //  "Where you use par_iter(), instead of using map try using fold then reduce. With rayon, fold will let you merge the data into HashMaps in parallel. Then reduce will take those maps and let you merge them into a single one. If you want to avoid the Vec altogether, you should be able to call par_bridge directly on the records() result instead of calling collect (then call fold and reduce). par_bridge creates a parallel iterator from a regular iterator."
         .map(|result| hash_fasta_rec(result, k))
         .collect();
 
     let hash_duration = start.elapsed();
 
-    //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
+    eprintln!(
+        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
+        hash_duration
+    );
+    
+    eprintln!("number of hashmaps in vec: {}\n", hash_vec.len());
 
     // MERGING HASHMAPS
-    /*
-    // THIS WORKS
-    let final_hash: HashMap<&[u8], usize> = hash_vec.par_iter()
-	    .fold(||HashMap::new(), |mut a: HashMap<&[u8], usize>, b| {
-		a.extend(b.into_iter()); a}
-	    )
-	.reduce(||HashMap::new(),|mut a, b| {
-	    for (k, v) in b {
-		if a.contains_key(k) {
-		    a.insert(k, v + a[k]);
-		} else {
-		    a.insert(k, v);
-		}
-	    }
-	    a
-	}
-	);
-   */
+
     // THIS WORKS
     let final_hash: DashMap<&[u8], usize> = DashMap::new();
     
@@ -90,6 +80,25 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
         }
     });
+        
+    // THIS WORKS
+    /*
+    let final_hash: FxHashMap<&[u8], usize> = hash_vec.par_iter()
+    .fold(||FxHashMap::new(), |mut a: FxHashMap<&[u8], usize>, b| {
+    a.extend(b.into_iter()); a}
+)
+    .reduce(||FxHashMap::new(),|mut a, b| {
+    for (k, v) in b {
+    if a.contains_key(k) {
+    a.insert(k, v + a[k]);
+} else {
+    a.insert(k, v);
+}
+}
+    a
+}
+);
+     */
     /*
     //  THIS WORKS
     let final_hash: HashMap<&[u8], usize> = Reduce::reduce(hash_vec.into_iter(), |mut ha, hb| {
@@ -104,6 +113,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }).unwrap();
      */
     let uniq_duration = start.elapsed();
+
+    eprintln!("Time elapsed merging hashmaps: {:?}\n", uniq_duration);
     
     // END OF MERGING
 
@@ -125,13 +136,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     });
     
     let duration = start.elapsed();
-
-    eprintln!(
-        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
-        hash_duration
-    );
-
-    eprintln!("Time elapsed merging hashmaps: {:?}\n", uniq_duration);
 
     eprintln!("Time elapsed in runtime: {:?}\n", duration);
 
