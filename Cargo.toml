@@ -8,5 +8,6 @@ edition = "2018"
 [dependencies]
 bio = "*"
 dashmap = "4.0.2"
+fxhash = "0.2.1"
 rayon = "*"
 rustc-hash = "1.1.0"
