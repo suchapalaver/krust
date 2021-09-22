@@ -87,7 +87,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let uniq_duration = start.elapsed();
 
     
-
+/*
     let stdout_ref = &std::io::stdout();
 
     final_hash.par_iter().for_each(|(k, f)| {
@@ -103,7 +103,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
         }
-    });
+    });*/
     let duration = start.elapsed();
 
     eprintln!(
