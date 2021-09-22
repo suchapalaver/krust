@@ -88,11 +88,28 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
-    
+    /*
     let hash_vec: Vec<HashMap<&[u8], usize>> = fasta_records
         .par_iter() //  Where you use par_iter(), instead of using map try using fold then reduce. With rayon, fold will let you merge the data into HashMaps in parallel. Then reduce will take those maps and let you merge them into a single one. If you want to avoid the Vec altogether, you should be able to call par_bridge directly on the records() result instead of calling collect (then call fold and reduce). par_bridge creates a parallel iterator from a regular iterator.
         .map(|result| hash_fasta_rec(result, k))
         .collect();
+*/
+    let final_hash: HashMap<&[u8], usize> = fasta_records.par_iter()
+	.map(|result| hash_fasta_rec(result, k))
+	.fold(||HashMap::new(), |mut a: HashMap<&[u8], usize>, b| {
+	    a.extend(b.into_iter());
+	    a
+	}).reduce(||HashMap::new(),
+		  |mut a, b| {
+		      for (k, v) in b {
+			  if a.contains_key(k) {
+			      a.insert(k, v + a[k]);
+			  } else {
+			      a.insert(k, v);
+			  }
+		      }
+		      a
+		  });
     
     let hash_duration = start.elapsed();
 
@@ -100,6 +117,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
         hash_duration
     );
+
+    //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
     
     // MERGING HASHMAPS
     /*
@@ -114,8 +133,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
      */
-    eprintln!("number of hashmaps in vec: {}", hash_vec.len());
-
+    /*
+    //  THIS WORKS
     let final_hash: HashMap<&[u8], usize> = Reduce::reduce(hash_vec.into_iter(), |mut ha, hb| {
 	    for (kmer, freq) in hb {
 		if ha.contains_key(kmer) {
@@ -126,6 +145,35 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
 	ha
     }).unwrap();
+     */
+    /*
+    let final_hash: HashMap<&&[u8], usize> = hash_vec
+	.par_iter()
+	.fold(||HashMap::new(), |mut a, b| {
+	    for (k, v) in b {
+		if a.contains_key(k) {
+		    eprintln!("cnt");
+		    a.insert(k, v + a[k]);
+		} else {
+		    eprintln!("else");
+		    a.insert(k, *v);
+		}
+	    }
+	    //eprintln!("{:?}", &a);
+	    //eprintln!("{:?}", &b);
+	    a
+	}).reduce(||HashMap::new(),
+		  |mut a, b| {
+		      for (k, v) in b {
+			  if a.contains_key(k) {
+			      a.insert(k, v + a[k]);
+			  } else {
+			      a.insert(k, v);
+			  }
+		      }
+		      a
+		  });
+    */
     // END OF MERGING
     let uniq_duration = start.elapsed();
 
@@ -138,7 +186,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
         if kmer.contains("N") {
         } else {
-            let rvc = revcomp(*k);
+            let rvc = revcomp(k as &[u8]);
 
             let rvc = str::from_utf8(&rvc).unwrap();
 
