@@ -88,9 +88,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
-
-    let hash_duration = start.elapsed();
-
     
     /*
     let hash_vec: Vec<HashMap<&[u8], usize>> = fasta_records
@@ -115,7 +112,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	    a}
 	);
     
-    
+    let hash_duration = start.elapsed();
+    let uniq_duration = start.elapsed();
+
 
     //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
     
@@ -174,10 +173,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 		  });
     */
     // END OF MERGING
-    let uniq_duration = start.elapsed();
-
     
 
+    
+/*
     let stdout_ref = &std::io::stdout();
 
     final_hash.par_iter().for_each(|(k, f)| {
@@ -193,7 +192,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
         }
-    });
+    });*/
     let duration = start.elapsed();
 
     eprintln!(
