@@ -72,9 +72,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let this = hash_vec.remove(*i);
     
-    let mut final_hash: DashMap<&[u8], usize> = DashMap::default();
+    let final_hash: DashMap<&[u8], usize> = DashMap::default();
 
-    this.par_iter().map(|(k, v)|final_hash.insert(k, *v));
+    this.par_iter().for_each(|(k, v)| { final_hash.insert(k, *v); });
 
     //eprintln!("this is the hash we're basing off: {:?}", final_hash);
 
@@ -83,7 +83,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     hash_vec.par_iter().for_each(|h| {
         for (kmer, freq) in h {
             if final_hash.contains_key(kmer) {
-		*final_hash.get_mut(kmer).unwrap() + freq;
+		*final_hash.get_mut(kmer).unwrap() += freq;
             } else {
                 final_hash.insert(kmer, *freq);
             }
@@ -94,7 +94,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let stdout_ref = &std::io::stdout();
 
-    final_hash.par_iter().for_each(|(k, f)| {
+    final_hash.into_iter().par_bridge().for_each(|(k, f)| {
         let kmer = str::from_utf8(k).unwrap();
 
         if kmer.contains("N") {
