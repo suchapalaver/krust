@@ -95,21 +95,21 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .collect();
 */
     let final_hash: HashMap<&[u8], usize> = fasta_records.par_iter()
-	.map(|result| hash_fasta_rec(result, k))
+	.map(|result| hash_fasta_rec(result, k)
+	)
 	.fold(||HashMap::new(), |mut a: HashMap<&[u8], usize>, b| {
-	    a.extend(b.into_iter());
-	    a
-	}).reduce(||HashMap::new(),
-		  |mut a, b| {
-		      for (k, v) in b {
-			  if a.contains_key(k) {
-			      a.insert(k, v + a[k]);
-			  } else {
-			      a.insert(k, v);
-			  }
-		      }
-		      a
-		  });
+	    a.extend(b.into_iter()); a}
+	)
+	.reduce(||HashMap::new(),|mut a, b| {
+	    for (k, v) in b {
+		if a.contains_key(k) {
+		    a.insert(k, v + a[k]);
+		} else {
+		    a.insert(k, v);
+		}
+	    }
+	    a}
+	);
     
     let hash_duration = start.elapsed();
 
