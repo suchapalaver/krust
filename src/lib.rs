@@ -88,6 +88,13 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
+
+    let hash_duration = start.elapsed();
+
+    eprintln!(
+        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
+        hash_duration
+    );
     /*
     let hash_vec: Vec<HashMap<&[u8], usize>> = fasta_records
         .par_iter() //  Where you use par_iter(), instead of using map try using fold then reduce. With rayon, fold will let you merge the data into HashMaps in parallel. Then reduce will take those maps and let you merge them into a single one. If you want to avoid the Vec altogether, you should be able to call par_bridge directly on the records() result instead of calling collect (then call fold and reduce). par_bridge creates a parallel iterator from a regular iterator.
@@ -111,12 +118,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	    a}
 	);
     
-    let hash_duration = start.elapsed();
-
-    eprintln!(
-        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
-        hash_duration
-    );
+    
 
     //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
     
