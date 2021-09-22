@@ -1,11 +1,9 @@
 use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
-use itertools::Itertools;
 use rayon::prelude::*;
 use rayon::iter::ParallelBridge;
-use rayon::prelude::ParallelIterator;
-use reduce::Reduce;
 //use rustc_hash::FxHashMap; //  Check Stack Overflow for suggestions
-use std::{collections::{HashMap, HashSet}, env, error::Error, fs::File, io::Write, str, time::Instant};
+use std::{collections::HashMap, env, error::Error, fs::File, io::Write, str, time::Instant};
+use dashmap::DashMap;
 
 pub struct Config {
     pub kmer_len: usize,
@@ -93,7 +91,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .par_iter() //  Where you use par_iter(), instead of using map try using fold then reduce. With rayon, fold will let you merge the data into HashMaps in parallel. Then reduce will take those maps and let you merge them into a single one. If you want to avoid the Vec altogether, you should be able to call par_bridge directly on the records() result instead of calling collect (then call fold and reduce). par_bridge creates a parallel iterator from a regular iterator.
         .map(|result| hash_fasta_rec(result, k))
         .collect();
-     
+
+    //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
+
+    // MERGING HASHMAPS
+    /*
     let final_hash: HashMap<&[u8], usize> = hash_vec.par_iter()
 	    .fold(||HashMap::new(), |mut a: HashMap<&[u8], usize>, b| {
 		a.extend(b.into_iter()); a}
@@ -109,27 +111,25 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	    a
 	}
 	);
-   
+   */
     
     let hash_duration = start.elapsed();
+
     let uniq_duration = start.elapsed();
 
-
-    //eprintln!("number of hashmaps in vec: {}", hash_vec.len());
+    let final_hash: DashMap<&[u8], usize> = DashMap::new();
     
-    // MERGING HASHMAPS
-    /*
     // THIS WORKS
-    hash_vec.into_iter().for_each(|h| {
+    hash_vec.par_iter().for_each(|h| {
         for (kmer, freq) in h {
             if final_hash.contains_key(kmer) {
-                final_hash.insert(kmer, freq + final_hash[kmer]);
+		*final_hash.get_mut(kmer).unwrap() += freq;
             } else {
-                final_hash.insert(kmer, freq);
+                final_hash.insert(kmer, *freq);
             }
         }
     });
-     */
+     
     /*
     //  THIS WORKS
     let final_hash: HashMap<&[u8], usize> = Reduce::reduce(hash_vec.into_iter(), |mut ha, hb| {
@@ -143,42 +143,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	ha
     }).unwrap();
      */
-    /*
-    let final_hash: HashMap<&&[u8], usize> = hash_vec
-	.par_iter()
-	.fold(||HashMap::new(), |mut a, b| {
-	    for (k, v) in b {
-		if a.contains_key(k) {
-		    eprintln!("cnt");
-		    a.insert(k, v + a[k]);
-		} else {
-		    eprintln!("else");
-		    a.insert(k, *v);
-		}
-	    }
-	    //eprintln!("{:?}", &a);
-	    //eprintln!("{:?}", &b);
-	    a
-	}).reduce(||HashMap::new(),
-		  |mut a, b| {
-		      for (k, v) in b {
-			  if a.contains_key(k) {
-			      a.insert(k, v + a[k]);
-			  } else {
-			      a.insert(k, v);
-			  }
-		      }
-		      a
-		  });
-    */
     // END OF MERGING
-    
 
-    
-/*
     let stdout_ref = &std::io::stdout();
 
-    final_hash.par_iter().for_each(|(k, f)| {
+    final_hash.into_iter().par_bridge().for_each(|(k, f)| {
         let kmer = str::from_utf8(k).unwrap();
 
         if kmer.contains("N") {
@@ -191,7 +160,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
         }
-    });*/
+    });
+    
     let duration = start.elapsed();
 
     eprintln!(
