@@ -1,7 +1,7 @@
 use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
 use rayon::prelude::*;
-use std::{collections::{HashMap, HashSet}, env, error::Error, fs::File, io::Write, str, time::Instant};
+use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
 use fxhash::{FxHashMap, FxHashSet};
 
 pub struct Config {
@@ -31,7 +31,7 @@ pub fn hash_fasta_rec(
 
     let mut new_hashmap = FxHashMap::default();
 
-    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) { // rust-bio's hash_kmers function, returns iterator of tuples (&[u8], Vec<u32>), the Vec being a list of indices of positions of kmer. 
+    for (kmer, kmer_pos) in hash_kmers(result_data.seq(), k) {
         new_hashmap.insert(kmer, kmer_pos.len());
     }
     new_hashmap
@@ -57,15 +57,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let hash_duration = start.elapsed();
 
     // merging hashmaps
-    //eprintln!("length of hash_vec now: {}", hash_vec.len());
-    
+
     let mut hash_len_vec = FxHashSet::default(); // create set of number of kmers 
     
     for h in &hash_vec {
 	hash_len_vec.insert(h.len());
     }
-    //eprintln!("hashmap lengths: {:?}", hash_len_vec);
-
     let longest_len = hash_len_vec.iter().max().unwrap();
     
     let i = &hash_vec.iter().position(|h| h.len() == *longest_len).unwrap();
@@ -75,10 +72,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let final_hash: DashMap<&[u8], usize> = DashMap::default();
 
     this.par_iter().for_each(|(k, v)| { final_hash.insert(k, *v); });
-
-    //eprintln!("this is the hash we're basing off: {:?}", final_hash);
-
-    //eprintln!("length of hash_vec post removal: {}", hash_vec.len());
 
     hash_vec.par_iter().for_each(|h| {
         for (kmer, freq) in h {
