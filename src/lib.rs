@@ -54,10 +54,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
     let hash_duration = start.elapsed();
 
-    eprintln!(
-        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
-        hash_duration
-    );
     // merging hashmaps
     //eprintln!("length of hash_vec now: {}", hash_vec.len());
     
@@ -90,7 +86,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     let uniq_duration = start.elapsed();
 
-    eprintln!("Time elapsed merging hashmaps: {:?}\n", uniq_duration);
+    
 
     let stdout_ref = &std::io::stdout();
 
@@ -109,6 +105,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
     let duration = start.elapsed();
+
+    eprintln!(
+        "Time elapsed creating hashmaps of all kmers in all sequences: {:?}\n",
+        hash_duration
+    );
+    eprintln!("Time elapsed merging hashmaps: {:?}\n", uniq_duration);
 
     eprintln!("Time elapsed in runtime: {:?}\n", duration);
 
