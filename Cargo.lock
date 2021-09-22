@@ -213,6 +213,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef8ae57c4978a2acd8b869ce6b9ca1dfe817bff704c220209fdef2c0b75a01b9"
 
 [[package]]
+name = "dashmap"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
+dependencies = [
+ "cfg-if",
+ "num_cpus",
+]
+
+[[package]]
 name = "derive-new"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -362,9 +372,8 @@ name = "krust"
 version = "0.1.0"
 dependencies = [
  "bio",
- "itertools",
+ "dashmap",
  "rayon",
- "reduce",
  "rustc-hash",
 ]
 
@@ -673,12 +682,6 @@ dependencies = [
  "lazy_static",
  "num_cpus",
 ]
-
-[[package]]
-name = "reduce"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16d2dc47b68ac15ea328cd7ebe01d7d512ed29787f7d534ad2a3c341328b35d7"
 
 [[package]]
 name = "regex"
