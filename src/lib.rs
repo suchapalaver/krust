@@ -1,4 +1,4 @@
-use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
+use bio::{alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
 use rayon::{iter::ParallelBridge, prelude::*};
 use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
@@ -24,8 +24,9 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     //  Get parameters
+    //  Data filepath
     let filepath: String = config.filepath;
-
+    //  K-mer length k
     let k: usize = config.kmer_len;
 
     //  Create fasta file reader
@@ -37,30 +38,32 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
 
-    //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
-    let fasta_hash: DashMap<&[u8], usize> = DashMap::new();
-
     //  Benchmark timer
     let hash_start = Instant::now();
-    
+
+    //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
+    let fasta_hash: DashMap<&[u8], Vec<u32>> = DashMap::new();
+
     //  Iterate through fasta records in parallel
-    fasta_records
-        .par_iter() 
-        .for_each(|result| {
-            let result_data: &fasta::Record = result.as_ref().unwrap();
-	    
-	    //  Call bio's hash_kmers function with record's sequence data and k-length
-            hash_kmers(result_data.seq(), k).into_iter().for_each(|(kmer, kmer_pos)| {
-		//  Update kmer entry data in fasta_hash Dashmap
-                fasta_hash 
-                    .entry(kmer)
-                    .and_modify(|v| *v += kmer_pos.len())
-                    .or_insert(kmer_pos.len());
-            });
-        });
+    fasta_records.par_iter().for_each(|result| {
+        let result_data: &fasta::Record = result.as_ref().unwrap();
+        {
+            let seq = result_data.seq();
+
+            for i in 0..(seq.len() + 1).saturating_sub(k) {
+                fasta_hash
+                    .entry(&seq[i..i + k])
+                    .or_insert_with(Vec::new)
+                    .push(i as u32);
+            }
+        }
+    });
     //  End of benchmark timer
     let uniq_duration = hash_start.elapsed();
-    eprintln!("Time elapsed merging sequence kmer data into hashmap: {:?}\n", uniq_duration);
+    eprintln!(
+        "Time elapsed merging sequence kmer data into hashmap: {:?}\n",
+        uniq_duration
+    );
 
     //  PRINTING OUTPUT -- by far the slowest task
 
@@ -69,29 +72,29 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     //  Create handle for writing to standard output
     let stdout_ref = &std::io::stdout();
-    
-    // Iterate in parallel through fasta_hash with rayon (crate) parallel bridge 
+
+    // Iterate in parallel through fasta_hash with rayon (crate) parallel bridge
     fasta_hash.into_iter().par_bridge().for_each(|(k, f)| {
-	//  Convert kmer bytes to str
+        //  Convert k-mer bytes to str
         let kmer = str::from_utf8(k).unwrap();
 
-	//  Don't write kamers containing 'N'
+        //  Don't write k-mers containing 'N'
         if kmer.contains('N') {
         } else {
-	    //  Use bio (crate) revcomp to get kmer reverse complement
-            let rvc = revcomp(k as &[u8]);
+            //  Use bio (crate) revcomp to get k-mer reverse complement
+            let rvc: Vec<u8> = revcomp(k as &[u8]);
 
-	    //  Convert revcomp from bytes to str
+            //  Convert revcomp from bytes to str
             let rvc = str::from_utf8(&rvc).unwrap();
 
-	    //  Create mutable lock to write to standard output from paralell process
+            //  Create mutable lock to write to standard output from parallel process
             let mut lck = stdout_ref.lock();
 
-	    //  Write (separated by tabs):
-	    //        kmer
-	    //        reverse complement
-	    //        frequency across fasta file 
-            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
+            //  Write (separated by tabs):
+            //        k-mer
+            //        reverse complement
+            //        frequency across fasta file
+            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Couldn't write output");
         }
     });
     //  END OF WRITING OUTPUT
