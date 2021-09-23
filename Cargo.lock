@@ -373,7 +373,6 @@ version = "0.1.0"
 dependencies = [
  "bio",
  "dashmap",
- "fxhash",
  "rayon",
 ]
 

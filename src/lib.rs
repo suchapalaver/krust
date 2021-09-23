@@ -1,4 +1,4 @@
-use bio::{alignment::sparse::hash_kmers, alphabets::dna::revcomp, io::fasta};
+use bio::{alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
 use rayon::{iter::ParallelBridge, prelude::*};
 use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
@@ -37,26 +37,28 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
 
-    //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
-    let fasta_hash: DashMap<&[u8], usize> = DashMap::new();
-
     //  Benchmark timer
     let hash_start = Instant::now();
+    
+    //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
+    let fasta_hash: DashMap<&[u8], Vec<u32>> = DashMap::new();
     
     //  Iterate through fasta records in parallel
     fasta_records
         .par_iter() 
         .for_each(|result| {
             let result_data: &fasta::Record = result.as_ref().unwrap();
-	    
-	    //  Call bio's hash_kmers function with record's sequence data and k-length
-            hash_kmers(result_data.seq(), k).into_iter().for_each(|(kmer, kmer_pos)| {
-		//  Update kmer entry data in fasta_hash Dashmap
-                fasta_hash 
-                    .entry(kmer)
-                    .and_modify(|v| *v += kmer_pos.len())
-                    .or_insert(kmer_pos.len());
-            });
+            {
+                let seq = result_data.seq();
+
+		let slc = seq;
+                
+                for i in 0..(slc.len() + 1).saturating_sub(k) {
+                    fasta_hash.entry(&slc[i..i + k])
+                        .or_insert_with(Vec::new)
+                        .push(i as u32);
+                }
+            }
         });
     //  End of benchmark timer
     let uniq_duration = hash_start.elapsed();
@@ -79,7 +81,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         if kmer.contains('N') {
         } else {
 	    //  Use bio (crate) revcomp to get kmer reverse complement
-            let rvc = revcomp(k as &[u8]);
+            let rvc: Vec<u8> = revcomp(k as &[u8]);
 
 	    //  Convert revcomp from bytes to str
             let rvc = str::from_utf8(&rvc).unwrap();
@@ -91,7 +93,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	    //        kmer
 	    //        reverse complement
 	    //        frequency across fasta file 
-            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f).expect("Couldn't write output");
+            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Couldn't write output");
         }
     });
     //  END OF WRITING OUTPUT
