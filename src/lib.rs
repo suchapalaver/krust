@@ -1,7 +1,8 @@
 use bio::{alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
-use rayon::{iter::ParallelBridge, prelude::*};
+use rayon::prelude::*;
 use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
+use std::io::BufWriter;
 
 pub struct Config {
     pub kmer_len: usize,
@@ -65,38 +66,37 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         uniq_duration
     );
 
-    //  PRINTING OUTPUT -- by far the slowest task
+    //  PRINTING OUTPUT
 
     //  Benchmark timer
     let print_start = Instant::now();
 
-    //  Create handle for writing to standard output
-    let stdout_ref = &std::io::stdout();
+    //  Create handle for writing
+    let file = File::create("output.tsv").unwrap();
 
-    // Iterate in parallel through fasta_hash with rayon (crate) parallel bridge
-    fasta_hash.into_iter().par_bridge().for_each(|(k, f)| {
+    let mut buf = BufWriter::new(file);
+
+    fasta_hash.into_iter().for_each(|(k, f)| {
         //  Convert k-mer bytes to str
         let kmer = str::from_utf8(k).unwrap();
 
         //  Don't write k-mers containing 'N'
-        if kmer.contains('N') {
+        if k.contains(&b'N') {
         } else {
             //  Use bio (crate) revcomp to get k-mer reverse complement
             let rvc: Vec<u8> = revcomp(k as &[u8]);
 
             //  Convert revcomp from bytes to str
-            let rvc = str::from_utf8(&rvc).unwrap();
-
-            //  Create mutable lock to write to standard output from parallel process
-            let mut lck = stdout_ref.lock();
+            let rvc: &str = str::from_utf8(&rvc).unwrap();
 
             //  Write (separated by tabs):
             //        k-mer
             //        reverse complement
             //        frequency across fasta file
-            writeln!(&mut lck, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Couldn't write output");
+	    writeln!(buf, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Unable to write data");
         }
     });
+    buf.flush().unwrap();
     //  END OF WRITING OUTPUT
     let duration = print_start.elapsed();
 
