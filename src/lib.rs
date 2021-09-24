@@ -72,9 +72,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let print_start = Instant::now();
 
     //  Create handle for writing
-    let file = File::create("output.tsv").unwrap();
+    //let handle = File::create("output.tsv").unwrap();
 
-    let mut buf = BufWriter::new(file);
+    let handle = &std::io::stdout();
+
+    let mut buf = BufWriter::new(handle);
+    
 
     fasta_hash.into_iter().for_each(|(k, f)| {
         //  Convert k-mer bytes to str
