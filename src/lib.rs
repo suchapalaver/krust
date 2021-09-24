@@ -53,8 +53,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     //  Iterate through fasta records in parallel
     fasta_records.par_iter().for_each(|result| {
-        let result_data: &fasta::Record = result.as_ref().unwrap();
+        
         {
+	    let result_data: &fasta::Record = result.as_ref().unwrap();
+	    
             let seq = result_data.seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
@@ -87,7 +89,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         let kmer = str::from_utf8(k).unwrap();
 
         //  Don't write k-mers containing 'N'
-        if k.contains(&b'N') {
+        if kmer.contains('N') {
         } else {
             //  Use bio (crate) revcomp to get k-mer reverse complement
             let rvc: Vec<u8> = revcomp(k as &[u8]);
