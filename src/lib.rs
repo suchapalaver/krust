@@ -1,8 +1,14 @@
 use bio::{alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
 use rayon::prelude::*;
-use std::{env, error::Error, fs::File, io::Write, str, time::Instant};
-use std::io::BufWriter;
+use std::{
+    env,
+    error::Error,
+    fs::File,
+    io::{BufWriter, Write},
+    str,
+    time::Instant,
+};
 
 pub struct Config {
     pub kmer_len: usize,
@@ -71,13 +77,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     //  Benchmark timer
     let print_start = Instant::now();
 
-    //  Create handle for writing
-    //let handle = File::create("output.tsv").unwrap();
-
+    //  Create handle and BufWriter for writing
     let handle = &std::io::stdout();
 
     let mut buf = BufWriter::new(handle);
-    
 
     fasta_hash.into_iter().for_each(|(k, f)| {
         //  Convert k-mer bytes to str
@@ -96,7 +99,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             //        k-mer
             //        reverse complement
             //        frequency across fasta file
-	    writeln!(buf, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Unable to write data");
+            writeln!(buf, "{}\t{}\t{}", kmer, rvc, f.len()).expect("Unable to write data");
         }
     });
     buf.flush().unwrap();
