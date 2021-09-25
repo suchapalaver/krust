@@ -22,7 +22,26 @@ impl Config {
         Ok(Config { kmer_len, filepath })
     }
 }
+/*
+struct RevComps {
+    revcomps: DashMap<Vec<u8>, Vec<u8>>
+}
 
+impl RevComps {
+    pub fn new() -> Self {
+        RevComps { revcomps: DashMap::new() }
+    }
+    
+    pub fn insert(&mut self, kmer: Vec<u8>, revcomp: Vec<u8>) {
+        self.revcomps.insert(kmer, revcomp);
+    }
+    /*
+    pub fn print_all(&self) {
+        self.revcomps.iter().for_each(|item| println!("{:#?}", item));
+    }
+     */
+}
+*/
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     //  Get parameters
     //  Data filepath
@@ -43,9 +62,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let hash_start = Instant::now();
 
     //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
-    let fasta_hash: DashMap<&[u8], Vec<u32>> = DashMap::new();
+    let fasta_hash: DashMap<Vec<u8>, Vec<u32>> = DashMap::new();
 
-    let revcomp_hash: DashMap<&[u8], &[u8]> = DashMap::new();
+    let revcomp_hash: DashMap<Vec<u8>, Vec<u8>> = DashMap::new();
 
     //  Iterate through fasta records in parallel
     fasta_records.par_iter().for_each(|result| {
@@ -56,35 +75,23 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let seq = result_data.seq();
 	    
 	    for i in 0..(seq.len() + 1).saturating_sub(k) {
-		let kmer: &[u8] = &seq[i..i + k];
-		
-		let rvc: Vec<u8> = revcomp(&seq[i..i + k]);
-		
-		//let rc: Vec<u8> = revcomp(&seq[i..i + k]);
 
-		//let rc_rv: Rc<&[u8]> = Rc::new(rc);
+		let kmer = min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k]));
 
-		//let key: &[u8] = min(&seq[i..i + k], &rc);
-		if revcomp_hash.contains_key(kmer) {
+		let rvc: Vec<u8> = max(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k]));
+		
+		if revcomp_hash.contains_key(&kmer) {
 		} else {
 		    revcomp_hash.insert(kmer, rvc);
 		}
-		
-		//let key = key.as_ref();
+	
 		fasta_hash
-		    .entry(&seq[i..i + k])
+		    .entry(seq[i..i + k].to_vec())
 		    .or_insert_with(Vec::new)
 		    .push(i as u32);
-		
-		    
-		    /*rc => {
-			fasta_hash
-			    .entry(rc)
-			    .or_insert_with(Vec::new)
-			    .push(i as u32);
-		    }*/
+	
 	    }
-		//let kmer = min(&seq[i..i + k], rc_rv); 	
+		//let kmer = min(&seq[i..i + k], rc_rv);  //  idea: identify kmer as opp to revcomp by lex.comp., then only update revcomp 
 	}
     });
     //  End of benchmark timer
@@ -117,7 +124,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     fasta_hash.into_iter().for_each(|(k, f)| {
         //  Convert k-mer bytes to str
-        let kmer = str::from_utf8(k).unwrap();
+        let kmer = str::from_utf8(&k).unwrap();
 	
         //  Don't write k-mers containing 'N'
         if kmer.contains('N') {
@@ -137,7 +144,40 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 	}	
     });
     buf.flush().unwrap();
+
+
+    //  Create handle and BufWriter for writing
+    let handle = &std::io::stdout();
+
+    let mut buf = BufWriter::new(handle);
+
+    revcomp_hash.into_iter().for_each(|(k, r)| {
+        //  Convert k-mer bytes to str
+        let kmer = str::from_utf8(&k).unwrap();
+	let rvc = str::from_utf8(&r).unwrap();
+	
+        //  Don't write k-mers containing 'N'
+        if kmer.contains('N') {
+        } else {
+	    //  Use bio (crate) revcomp to get k-mer reverse complement
+	    //let rvc: Vec<u8> = revcomp(k as &[u8]);
+	    
+	    //  Convert revcomp from bytes to str
+	    //let rvc: &str = str::from_utf8(&rvc).unwrap();
+	    
+	    //  Write (separated by tabs):
+	    //        k-mer
+	    //        reverse complement
+	    //        frequency across fasta file
+	    //let rv_vals = fasta_hash.get(revcomp).unwrap().len();	
+	    writeln!(buf, "{}\t{}", kmer, rvc).expect("Unable to write data");
+	}	
+    });
+    buf.flush().unwrap();
+
+    
     //  END OF WRITING OUTPUT
+
     let duration = print_start.elapsed();
 
     eprintln!("Time elapsed printing output: {:?}\n", duration);
