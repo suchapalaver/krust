@@ -8,7 +8,6 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     str,
-    time::Instant,
 };
 
 pub struct Config {
@@ -46,9 +45,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
 
-    //  Benchmark timer
-    let hash_start = Instant::now();
-
     //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
     let fasta_hash: DashMap<Vec<u8>, Vec<u32>> = DashMap::new();
 
@@ -68,16 +64,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
 
-    //  End of benchmark timer
-    let uniq_duration = hash_start.elapsed();
-    eprintln!(
-        "Time elapsed merging sequence kmer data into hashmap: {:?}\n",
-        uniq_duration
-    );
-
     //  PRINTING OUTPUT
-    //  Benchmark timer
-    let print_start = Instant::now();
 
     //  Create handle and BufWriter for writing
     let handle = &std::io::stdout();
@@ -98,11 +85,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     }
     buf.flush().unwrap();
-
-    //  END OF WRITING OUTPUT
-    let duration = print_start.elapsed();
-
-    eprintln!("Time elapsed printing output: {:?}\n", duration);
 
     Ok(())
 }
