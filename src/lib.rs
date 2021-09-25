@@ -50,15 +50,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     //  Iterate through fasta records in parallel
     fasta_records.par_iter().for_each(|result| {
-        let result_data: &fasta::Record = result.as_ref().unwrap();
-
-        let seq: &[u8] = result_data.seq();
+        let seq: &[u8] = result.as_ref().unwrap().seq();
 
         for i in 0..(seq.len() + 1).saturating_sub(k) {
-            let kmer: Vec<u8> = min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k]));
-
             fasta_hash
-                .entry(kmer)
+                .entry(min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k])))
                 .or_insert_with(Vec::new)
                 .push(i as u32);
         }
@@ -73,7 +69,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     for (k, f) in fasta_hash.into_iter() {
         //  Convert k-mer bytes to str
-        let kmer = str::from_utf8(&k).unwrap();
+        let kmer: &str = str::from_utf8(&k).unwrap();
 
         //  Don't write k-mers containing 'N'
         if kmer.contains('N') {
