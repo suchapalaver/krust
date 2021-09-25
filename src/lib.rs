@@ -41,7 +41,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     //  Read fasta records into a vector
-    let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().collect();
+    let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().into_iter().par_bridge().collect();
 
     eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
 
