@@ -81,7 +81,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             //  Write (separated by tabs):
             //  k-mer (lexicographically smaller of k-mer, reverse complement pair)
             //  frequency across fasta file for both kmer and its reverse complement
-            writeln!(buf, "{}\t{}", kmer, f.len()).expect("Unable to write data");
+            writeln!(buf, ">{}\n{}", f.len(), kmer).expect("Unable to write data");
         }
     }
     buf.flush().unwrap();
