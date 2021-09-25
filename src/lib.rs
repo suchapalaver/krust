@@ -40,34 +40,31 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let reader: fasta::Reader<std::io::BufReader<File>> =
         fasta::Reader::from_file(&filepath).unwrap();
 
-    //  Read fasta records into a vector
-    let fasta_records: Vec<Result<fasta::Record, std::io::Error>> = reader.records().into_iter().par_bridge().collect();
-
-    eprintln!("Number of records in fasta file: {}\n", fasta_records.len());
-
     //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
     let fasta_hash: DashMap<Vec<u8>, Vec<u32>> = DashMap::new();
 
-    //  Iterate through fasta records in parallel
-    fasta_records.par_iter().for_each(|result| {
-        let seq: &[u8] = result.as_ref().unwrap().seq();
+    //  Read fasta records into a vector
+    reader
+        .records()
+        .into_iter()
+        .par_bridge()
+        .for_each(|result| {
+            let seq: &[u8] = result.as_ref().unwrap().seq();
 
-        for i in 0..(seq.len() + 1).saturating_sub(k) {
-            fasta_hash
-                .entry(min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k])))
-                .or_insert_with(Vec::new)
-                .push(i as u32);
-        }
-    });
-
+            for i in 0..(seq.len() + 1).saturating_sub(k) {
+                fasta_hash
+                    .entry(min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k])))
+                    .or_insert_with(Vec::new)
+                    .push(i as u32);
+            }
+        });
     //  PRINTING OUTPUT
-
     //  Create handle and BufWriter for writing
-    let handle = &std::io::stdout();
+    let handle = std::io::stdout();
 
     let mut buf = BufWriter::new(handle);
 
-    for (k, f) in fasta_hash.into_iter() {
+    fasta_hash.into_iter().for_each(|(k, f)| {
         //  Convert k-mer bytes to str
         let kmer: &str = str::from_utf8(&k).unwrap();
 
@@ -79,7 +76,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             //  frequency across fasta file for both kmer and its reverse complement
             writeln!(buf, ">{}\n{}", f.len(), kmer).expect("Unable to write data");
         }
-    }
+    });
     buf.flush().unwrap();
 
     Ok(())
