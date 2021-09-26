@@ -40,10 +40,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let reader: fasta::Reader<std::io::BufReader<File>> =
         fasta::Reader::from_file(&filepath).unwrap();
 
-    //  Create a Dashmap, a hashmap mutably accessible from different parallel processes
-    let fasta_hash: DashMap<Vec<u8>, Vec<u32>> = DashMap::new();
+    //  Create a DashMap
+    let fasta_hash: DashMap<Vec<u8>, i64> = DashMap::new();
 
-    //  Read fasta records into a vector
+    //  Read fasta records into a Dashmap, a hashmap mutably accessible from different parallel processes
     reader
         .records()
         .into_iter()
@@ -52,12 +52,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let seq: &[u8] = result.as_ref().unwrap().seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
-                fasta_hash
-                    .entry(min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k])))
-                    .or_insert_with(Vec::new)
-                    .push(i as u32);
+                *fasta_hash //  Make kmer for output lexicographically min(kmer, reverse-complement)
+		    .entry(min(seq[i..i + k].to_vec(), revcomp(&seq[i..i + k])))
+		    .or_insert(0) += 1;
             }
         });
+
     //  PRINTING OUTPUT
     //  Create handle and BufWriter for writing
     let handle = std::io::stdout();
@@ -65,16 +65,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(handle);
 
     fasta_hash.into_iter().for_each(|(k, f)| {
-        //  Convert k-mer bytes to str
-        let kmer: &str = str::from_utf8(&k).unwrap();
-
-        //  Don't write k-mers containing 'N'
+        let kmer: String = String::from_utf8(k).unwrap();
+        //  Irradicate kmers containing 'N'
         if kmer.contains('N') {
         } else {
-            //  Write (separated by tabs):
+            //  Write:
+            //  >frequency across fasta file for both kmer and its reverse complement
             //  k-mer (lexicographically smaller of k-mer, reverse complement pair)
-            //  frequency across fasta file for both kmer and its reverse complement
-            writeln!(buf, ">{}\n{}", f.len(), kmer).expect("Unable to write data");
+            writeln!(buf, ">{}\n{}", f, kmer).expect("Unable to write data");
         }
     });
     buf.flush().unwrap();
