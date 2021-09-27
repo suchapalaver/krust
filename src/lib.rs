@@ -41,7 +41,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         fasta::Reader::from_file(&filepath).unwrap();
 
     //  Create a DashMap
-    let fasta_hash: DashMap<Vec<u8>, i64> = DashMap::new();
+    let fasta_hash: DashMap<Vec<u8>, usize> = DashMap::new();
 
     //  Read fasta records into a Dashmap, a hashmap mutably accessible from different parallel processes
     reader
