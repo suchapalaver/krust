@@ -54,8 +54,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .for_each(|result| {
             let seq: &[u8] = result.as_ref().unwrap().seq();
 
-            for i in 0..(seq.len() + 1).saturating_sub(k) {
-		
+            for i in 0..(seq.len() + 1).saturating_sub(k) {	
                 //  Irradicate kmers containing 'N'
                 if !seq[i..i + k].contains(&n) {
 		    //  Make output kmers the lexicographically smaller of
@@ -78,7 +77,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         //  Write:
         //  >frequency across fasta file for both kmer and its reverse complement
         //  k-mer (lexicographically smaller of k-mer, reverse complement pair)
-        writeln!(buf, ">{}\n{}", f, str::from_utf8(&k).unwrap()).expect("\tUnable to write data");
+        writeln!(buf, ">{}\n{}", f, str::from_utf8(&k).unwrap()).expect("Unable to write data");
     });
     buf.flush().unwrap();
     eprintln!("Done\n");
