@@ -5,7 +5,6 @@ use std::{
     cmp::min,
     env,
     error::Error,
-    fs::File,
     io::{BufWriter, Write},
     str,
 };
@@ -14,6 +13,7 @@ pub struct Config {
     pub kmer_len: usize,
     pub filepath: String,
 }
+
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
         args.next();
@@ -29,25 +29,25 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    //  Get parameters
-    //  Fasta filepath
+    //  Get filepath and k-mer length
     let filepath: String = config.filepath;
 
-    //  K-mer length k
     let k: usize = config.kmer_len;
 
-    // 'N'
-    const N: u8 = b'N';
+    //  Create a hashmap of canonical k-mers and their frequency across all records
+    let fasta_hash: DashMap<Box<[u8]>, u32> = kanonicalize(filepath, k);
 
-    //  Create fasta file reader
-    let reader: fasta::Reader<std::io::BufReader<File>> =
-        fasta::Reader::from_file(&filepath).unwrap();
+    //  Print
+    output(fasta_hash);
 
-    //  Create a DashMap
+    Ok(())
+}
+
+pub fn kanonicalize(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
     let fasta_hash: DashMap<Box<[u8]>, u32> = DashMap::new();
 
-    //  Read fasta records into a Dashmap, a hashmap mutably accessible from different parallel processes
-    reader
+    //  Read fasta records and count kmers
+    fasta::Reader::from_file(&filepath).unwrap()
         .records()
         .into_iter()
         .par_bridge()
@@ -56,17 +56,20 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
                 //  Irradicate kmers containing 'N'
-                if !seq[i..i + k].contains(&N) {
-                    //  Canonicalize by lexicographically smaller of kmer/reverse-complement
-                    *fasta_hash
-                        .entry(Box::from(min(&seq[i..i + k], &revcomp(&seq[i..i + k]))))
-                        .or_insert(0) += 1;
+                if seq[i..i + k].contains(&b'N') {
                 } else {
+                    //  Canonicalize by lexicographically smaller of kmer/reverse-complement
+                    let canon: Box<[u8]> =
+                        Box::from(min(&seq[i..i + k], &revcomp(&seq[i..i + k])));
+                    // update DashMap with canonical kmer count
+                    *fasta_hash.entry(canon).or_insert(0) += 1;
                 }
             }
         });
+    fasta_hash
+}
 
-    //  PRINTING OUTPUT
+pub fn output(fasta_hash: DashMap<Box<[u8]>, u32>) {
     //  Create handle and BufWriter for writing
     let handle = std::io::stdout();
 
@@ -76,10 +79,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         //  Write:
         //  >frequency across fasta file for both kmer and its reverse complement
         //  canonical k-mer
-        writeln!(buf, ">{}\n{}", f, str::from_utf8(&kmer).unwrap()).expect("Unable to write data");
+        writeln!(buf, ">{}\n{}", f, str::from_utf8(&kmer).unwrap())
+            .expect("Unable to write data");
     });
 
     buf.flush().unwrap();
-
-    Ok(())
 }
