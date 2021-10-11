@@ -8,7 +8,7 @@ fn main() {
         process::exit(1);
     });
 
-    eprintln!("\nSearching for kmers of length {}", config.kmer_len);
+    eprintln!("\nSearching for k-mers of length {}", config.kmer_len);
     eprintln!("... in file {}\n", config.filepath);
 
     if let Err(e) = krust::run(config) {

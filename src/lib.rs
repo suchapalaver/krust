@@ -1,8 +1,8 @@
 use bio::{alphabets::dna::revcomp, io::fasta};
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use rayon::prelude::*;
 use std::{
-    cmp::{max, min},
+    cmp::min,
     env,
     error::Error,
     io::{BufWriter, Write},
@@ -30,31 +30,24 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     //  Get filepath and k-mer length
-    //  Create a hashmap of canonical k-mers and their frequency across all records
+    //  Record canonical k-mers and their frequency across all records
     //  Print output
 
     let filepath: String = config.filepath;
 
     let k: usize = config.kmer_len;
 
-    let fasta_hash: DashMap<Box<[u8]>, u32> = canonicalize(filepath, k);
-
-    output(fasta_hash);
+    print_output(canonicalize(filepath, k));
 
     Ok(())
 }
 
 pub fn canonicalize(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
     //  Use DashMap for storing canonical k-mers and their frequency in the data.
-    //  Use DashSet to log reverse compliment k-mers.
     //  Read sequences from fasta records in parallel using rayon (crate).
-    //  Ignore substrings containing 'N'.
     //  Canonicalize by lexicographically smaller of k-mer/reverse-complement
-    //  Skip performing repeat lexicographical size / reverse complement conversions.
 
     let canonical_hash: DashMap<Box<[u8]>, u32> = DashMap::new();
-
-    let lookup: DashSet<Box<[u8]>> = DashSet::new();
 
     fasta::Reader::from_file(&filepath)
         .unwrap()
@@ -67,27 +60,18 @@ pub fn canonicalize(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
             for i in 0..(seq.len() + 1).saturating_sub(k) {
                 let substring: &[u8] = &seq[i..i + k];
 
-                if substring.contains(&b'N') {
+                if !substring.contains(&b'N') {
+                    *canonical_hash
+                        .entry(Box::from(min(substring, &revcomp(substring))))
+                        .or_insert(0) += 1;
                 } else {
-                    let boxed_sub: Box<[u8]> = Box::from(substring);
-
-                    if lookup.contains(&boxed_sub) {
-                        //let canon: Box<[u8]>= Box::from(&**lookup.get(&substring).unwrap().value());
-                        *canonical_hash.entry(Box::from(revcomp(substring))).or_insert(0) += 1;
-                    } else if let Some(mut x) = canonical_hash.get_mut(&boxed_sub) {
-			*x += 1;
-		    } else {
-                        *canonical_hash.entry(Box::from(min(substring, &revcomp(substring)))).or_insert(0) += 1;
-
-                        lookup.insert(Box::from(max(substring, &revcomp(substring))));
-                    }
-                }
+                } //  Ignore substrings containing 'N'.
             }
         });
     canonical_hash
 }
 
-pub fn output(fasta_hash: DashMap<Box<[u8]>, u32>) {
+pub fn print_output(fasta_hash: DashMap<Box<[u8]>, u32>) {
     //  Create handle and BufWriter and write on alternate lines:
     //  ">{frequency across fasta file for both canonical k-mer and its reverse complement}"
     //  "{canonical k-mer}"
