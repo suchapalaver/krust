@@ -28,25 +28,43 @@ impl Config {
     }
 }
 
+///  Records canonical k-mers and their frequency across all records.
+///  Uses DashMap to store canonical k-mers and their frequency in the data.
+///  Reads sequences from fasta records in parallel using rayon (crate).
+///  Ignores substrings containing 'N'.
+///  Canonicalizes by lexicographically smaller of k-mer/reverse-complement
+///  Prints to stdout.
+///  Creates handle and BufWriter, writes on alternate lines,
+///  ">{frequency across fasta file for both canonical k-mer and its reverse complement}",
+///  "{canonical k-mer}"
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    //  Get filepath and k-mer length
-    //  Record canonical k-mers and their frequency across all records
-    //  Print output
+    let k = config.kmer_len;
+    assert!(
+        k > 0,
+        "The requested k-mer length caused a problem. k = {}",
+        k
+    );
 
-    let filepath: String = config.filepath;
+    {
+        let fasta_hash = canonicalize_kmers(config.filepath, k);
+        let mut buf = BufWriter::new(std::io::stdout());
 
-    let k: usize = config.kmer_len;
+        fasta_hash.into_iter().for_each(|(kmer, count)| {
+            writeln!(buf, ">{}\n{}", count, str::from_utf8(&kmer).unwrap())
+                .expect("Unable to write output");
+        });
 
-    print_output(canonicalize(filepath, k));
+        buf.flush().unwrap();
+    };
 
     Ok(())
 }
 
-pub fn canonicalize(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
-    //  Use DashMap for storing canonical k-mers and their frequency in the data.
-    //  Read sequences from fasta records in parallel using rayon (crate).
-    //  Canonicalize by lexicographically smaller of k-mer/reverse-complement
-
+///  Reads sequences from fasta records in parallel using rayon (crate).
+///  Ignores substrings containing 'N'.
+///  Canonicalizes by lexicographically smaller of k-mer/reverse-complement
+///  Returns a DashMap canonical k-mer keys and their respective counts in the data.
+pub fn canonicalize_kmers(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
     let canonical_hash: DashMap<Box<[u8]>, u32> = DashMap::new();
 
     fasta::Reader::from_file(&filepath)
@@ -65,23 +83,14 @@ pub fn canonicalize(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
                         .entry(Box::from(min(substring, &revcomp(substring))))
                         .or_insert(0) += 1;
                 } else {
-                } //  Ignore substrings containing 'N'.
+                }
             }
         });
+
     canonical_hash
 }
 
-pub fn print_output(fasta_hash: DashMap<Box<[u8]>, u32>) {
-    //  Create handle and BufWriter and write on alternate lines:
-    //  ">{frequency across fasta file for both canonical k-mer and its reverse complement}"
-    //  "{canonical k-mer}"
-    let handle = std::io::stdout();
-
-    let mut buf = BufWriter::new(handle);
-
-    fasta_hash.into_iter().for_each(|(kmer, f)| {
-        writeln!(buf, ">{}\n{}", f, str::from_utf8(&kmer).unwrap()).expect("Unable to write data");
-    });
-
-    buf.flush().unwrap();
-}
+/*
+/// Returns k-mer counts for individual sequences in a fasta file
+pub fn single_sequence_canonical_kmers(filepath: String, k: usize) {}
+*/
