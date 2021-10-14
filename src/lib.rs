@@ -4,7 +4,7 @@
 //!
 //! Krust prints to `stdout`, writing, on alternate lines, for example, to a .tsv file:
 //!
-//!  `>{frequency across fasta file for both canonical k-mer and its reverse complement}`,
+//!  `>{frequency across fasta file for both canonical k-mer and its reverse complement}`
 //!
 //!  `{canonical k-mer}`
 //!
