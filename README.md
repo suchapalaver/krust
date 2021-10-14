@@ -7,10 +7,10 @@ or, searching for kmers of length 21:
 
 `krust` prints to `stdout`, writing, on alternate lines:  
 ```>{frequency}```  
-```{canonical k-mer}```  
-```>{frequency}```
-```>(canonical k-mer}```
-...
+```{canonical k-mer}```   
+```>{frequency}```  
+```>(canonical k-mer}```  
+...  
 
 `krust` uses [`rust-bio`](https://docs.rs/bio/0.38.0/bio/), [`rayon`](https://docs.rs/rayon/1.5.1/rayon/), and [`dashmap`](https://docs.rs/crate/dashmap/4.0.2).  
 
