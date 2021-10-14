@@ -8,7 +8,7 @@ or, searching for kmers of length 21:
 `krust` prints to `stdout`, writing, on alternate lines:  
 ```>{frequency}```  
 ```{canonical k-mer}```  
-```>{frequency}
+```>{frequency}```
 ```>(canonical k-mer}```
 ...
 
