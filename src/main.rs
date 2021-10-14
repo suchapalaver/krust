@@ -1,6 +1,9 @@
-use krust::Config;
-use std::env;
-use std::process;
+use krust::{canonicalize_kmers, Config};
+use std::{
+    env,
+    io::{BufWriter, Write},
+    process, str,
+};
 
 fn main() {
     let config = Config::new(env::args()).unwrap_or_else(|err| {
@@ -8,11 +11,31 @@ fn main() {
         process::exit(1);
     });
 
-    eprintln!("\nSearching for k-mers of length {}", config.kmer_len);
-    eprintln!("... in file {}\n", config.filepath);
+    assert!(
+        config.kmer_len > 0,
+        "The requested k-mer length caused a problem. k = {}",
+        config.kmer_len
+    );
 
-    if let Err(e) = krust::run(config) {
-        eprintln!("Application error: {}", e);
-        process::exit(1);
+    eprintln!(
+        "Searching for k-mers of length {}\n... in file {}\n",
+        config.kmer_len, config.filepath
+    );
+
+    match canonicalize_kmers(config.filepath, config.kmer_len) {
+        Err(e) => {
+            eprintln!("Application error: {}", e);
+            process::exit(1);
+        }
+        Ok(fasta_hash) => {
+            let mut buf = BufWriter::new(std::io::stdout());
+
+            fasta_hash.into_iter().for_each(|(kmer, count)| {
+                writeln!(buf, ">{}\n{}", count, str::from_utf8(&kmer).unwrap())
+                    .expect("Unable to write output");
+            });
+
+            buf.flush().unwrap();
+        }
     }
 }
