@@ -64,8 +64,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 ///  Ignores substrings containing 'N'.
 ///  Canonicalizes by lexicographically smaller of k-mer/reverse-complement
 ///  Returns a DashMap canonical k-mer keys and their respective counts in the data.
-pub fn canonicalize_kmers(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32> {
-    let canonical_hash: DashMap<Box<[u8]>, u32> = DashMap::new();
+pub fn canonicalize_kmers(filepath: String, k: usize) -> DashMap<Box<[u8]>, u64> {
+    let canonical_hash: DashMap<Box<[u8]>, u64> = DashMap::new();
 
     fasta::Reader::from_file(&filepath)
         .unwrap()
@@ -91,6 +91,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> DashMap<Box<[u8]>, u32>
 }
 
 /*
+Future:
 /// Returns k-mer counts for individual sequences in a fasta file
 pub fn single_sequence_canonical_kmers(filepath: String, k: usize) {}
 */
