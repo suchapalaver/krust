@@ -76,9 +76,9 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> DashMap<Box<[u8]>, u64>
             let seq: &[u8] = record.as_ref().unwrap().seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
-                let substring: &[u8] = &seq[i..i + k];
-
-                if !substring.contains(&b'N') {
+                if !&seq[i..i + k].contains(&b'N') {
+		    let substring: &[u8] = &seq[i..i + k];
+		    
                     *canonical_hash
                         .entry(Box::from(min(substring, &revcomp(substring))))
                         .or_insert(0) += 1;
