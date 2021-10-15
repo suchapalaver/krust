@@ -49,6 +49,7 @@ impl Config {
     }
 }
 
+/// A custom `DashMap` w/ `FxHasher`.
 pub type KrustMap = DashMap<Box<[u8]>, u64, BuildHasherDefault<FxHasher>>;
 
 /// Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/).
