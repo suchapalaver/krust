@@ -53,7 +53,7 @@ impl Config {
 /// ```use dashmap::DashMap;```  
 /// ```use fxhash::FxHasher;```  
 /// ```// skip```  
-/// ```let canonical_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
+/// ```let dashfx_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
 pub type DashFx = DashMap<Box<[u8]>, u64, BuildHasherDefault<FxHasher>>;
 
