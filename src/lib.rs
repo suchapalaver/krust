@@ -26,24 +26,34 @@ use bio::{alphabets::dna::revcomp, io::fasta};
 use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
-use std::{cmp::min, env, hash::BuildHasherDefault};
+use std::{
+    env,
+    error::Error,
+    hash::BuildHasherDefault,
+    io::{BufWriter, Write},
+    str,
+};
 
-/// A simple struct for parsing the necessary command line k-size and filepath arguments.
+/// A simple struct for parsing command line k-size and filepath arguments.
 pub struct Config {
     pub kmer_len: usize,
     pub filepath: String,
 }
 
 impl Config {
-    pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
+    pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
         args.next();
 
-        let kmer_len = match args.next() {
-            Some(arg) => arg.parse().unwrap(),
-            None => return Err("Problem with k-mer length input"),
-        };
-        let filepath = args.next().unwrap();
+        let mut kmer_len: usize = 0;
 
+        if let Some(arg) = args.next() {
+            kmer_len = arg.as_str().parse()?;
+        }
+
+        let filepath = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Issue with filepath input".into()),
+        };
         Ok(Config { kmer_len, filepath })
     }
 }
@@ -63,27 +73,58 @@ pub type DashFx = DashMap<Box<[u8]>, u64, BuildHasherDefault<FxHasher>>;
 /// hashmap of canonical k-mers (keys) and their frequency in the data (values).  
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
-pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<DashFx, &'static str> {
+pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let canonical_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
-    fasta::Reader::from_file(&filepath)
+    let _ = fasta::Reader::from_file(&filepath)
         .unwrap()
         .records()
         .into_iter()
         .par_bridge()
         .for_each(|record| {
-            let seq: &[u8] = record.as_ref().unwrap().seq();
+            let seq: &[u8] = record
+                .as_ref()
+                .unwrap_or_else(|_| {
+                    panic!("{}", "problem getting fasta records from file".to_string())
+                })
+                .seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
-                if !&seq[i..i + k].contains(&b'N') {
-                    let substring: &[u8] = &seq[i..i + k];
-                    let canonical_kmer = Box::from(min(substring, &revcomp(substring)));
+                let k_bytes = &seq[i..i + k];
 
-                    *canonical_hash.entry(canonical_kmer).or_insert(0) += 1;
-                } else {
+                match k_bytes {
+                    kmer if !&seq[i..i + k].contains(&78_u8)
+                        && canonical_hash.contains_key(&Box::from(kmer)) =>
+                    {
+                        *canonical_hash.entry(Box::from(kmer)).or_insert(0) += 1
+                    }
+		    
+                    kmer if !&seq[i..i + k].contains(&78_u8) && revcomp(kmer).as_slice() > kmer => {
+                        *canonical_hash.entry(Box::from(kmer)).or_insert(0) += 1
+                    }
+		    
+                    not_canonical
+                        if !not_canonical.contains(&78_u8)
+                            && revcomp(not_canonical).as_slice() < not_canonical =>
+                    {
+                        *canonical_hash
+                            .entry(Box::from(revcomp(not_canonical)))
+                            .or_insert(0) += 1
+                    }
+		    
+                    invalid if invalid.contains(&78_u8) => continue,
+
+		    &_ => panic!("{}", "problem matching canonical kmer".to_string()),
                 }
             }
         });
 
-    Ok(canonical_hash)
+    let mut buf = BufWriter::new(std::io::stdout());
+
+    canonical_hash.into_iter().for_each(|(kmer, count)| {
+        writeln!(buf, ">{}\n{}", count, str::from_utf8(&kmer).unwrap())
+            .expect("Unable to write output");
+    });
+    buf.flush()?;
+    Ok(())
 }
