@@ -65,7 +65,7 @@ impl Config {
 /// ```// skip```  
 /// ```let dashfx_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
-pub type DashFx = DashMap<Box<[u8]>, u64, BuildHasherDefault<FxHasher>>;
+pub type DashFx = DashMap<Box<[u8]>, u32, BuildHasherDefault<FxHasher>>;
 
 ///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
@@ -74,7 +74,7 @@ pub type DashFx = DashMap<Box<[u8]>, u64, BuildHasherDefault<FxHasher>>;
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
 pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
-    let canonical_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
+    let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
     let _ = fasta::Reader::from_file(&filepath)
         .unwrap()
@@ -93,21 +93,22 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 let k_bytes = &seq[i..i + k];
 
                 match k_bytes {
-                    kmer if !&seq[i..i + k].contains(&78_u8)
-                        && canonical_hash.contains_key(&Box::from(kmer)) =>
+		    
+                    kmer if !kmer.contains(&78_u8)
+                        && kmer_map.contains_key(&Box::from(kmer)) =>
                     {
-                        *canonical_hash.entry(Box::from(kmer)).or_insert(0) += 1
+                        *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
                     }
 		    
-                    kmer if !&seq[i..i + k].contains(&78_u8) && revcomp(kmer).as_slice() > kmer => {
-                        *canonical_hash.entry(Box::from(kmer)).or_insert(0) += 1
+                    kmer if !kmer.contains(&78_u8) && revcomp(kmer).as_slice() > kmer => {
+                        *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
                     }
 		    
                     not_canonical
                         if !not_canonical.contains(&78_u8)
                             && revcomp(not_canonical).as_slice() < not_canonical =>
                     {
-                        *canonical_hash
+                        *kmer_map
                             .entry(Box::from(revcomp(not_canonical)))
                             .or_insert(0) += 1
                     }
@@ -121,7 +122,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 
     let mut buf = BufWriter::new(std::io::stdout());
 
-    canonical_hash.into_iter().for_each(|(kmer, count)| {
+    kmer_map.into_iter().for_each(|(kmer, count)| {
         writeln!(buf, ">{}\n{}", count, str::from_utf8(&kmer).unwrap())
             .expect("Unable to write output");
     });
