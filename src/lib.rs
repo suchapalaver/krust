@@ -76,8 +76,7 @@ pub type DashFx = DashMap<Box<[u8]>, u32, BuildHasherDefault<FxHasher>>;
 pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
-    let _ = fasta::Reader::from_file(&filepath)
-        .unwrap()
+    let _ = fasta::Reader::from_file(&filepath)?
         .records()
         .into_iter()
         .par_bridge()
@@ -90,32 +89,27 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 .seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
-                let k_bytes = &seq[i..i + k];
+                match &seq[i..i + k] {
+                    kmer if !kmer.contains(&78_u8) => match kmer {
+                        kmer if kmer_map.contains_key(&Box::from(kmer)) => {
+                            *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
+                        }
 
-                match k_bytes {
-		    
-                    kmer if !kmer.contains(&78_u8)
-                        && kmer_map.contains_key(&Box::from(kmer)) =>
-                    {
-                        *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
-                    }
-		    
-                    kmer if !kmer.contains(&78_u8) && revcomp(kmer).as_slice() > kmer => {
-                        *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
-                    }
-		    
-                    not_canonical
-                        if !not_canonical.contains(&78_u8)
-                            && revcomp(not_canonical).as_slice() < not_canonical =>
-                    {
-                        *kmer_map
-                            .entry(Box::from(revcomp(not_canonical)))
-                            .or_insert(0) += 1
-                    }
-		    
-                    invalid if invalid.contains(&78_u8) => continue,
+                        kmer if revcomp(kmer).as_slice() > kmer => {
+                            *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
+                        }
 
-		    &_ => panic!("{}", "problem matching canonical kmer".to_string()),
+                        not_canonical if revcomp(not_canonical).as_slice() < not_canonical => {
+                            *kmer_map
+                                .entry(Box::from(revcomp(not_canonical)))
+                                .or_insert(0) += 1
+                        }
+
+                        invalid if invalid.contains(&78_u8) => continue,
+
+                        &_ => panic!("{}", "problem matching canonical kmer".to_string()),
+                    },
+                    &_ => continue,
                 }
             }
         });
