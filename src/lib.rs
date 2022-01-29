@@ -42,18 +42,20 @@ pub struct Config {
 
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
-        args.next();
-
-        let mut kmer_len: usize = 0;
-
-        if let Some(arg) = args.next() {
-            kmer_len = arg.as_str().parse()?;
-        }
+        let kmer_len: usize = match args.nth(1) {
+            Some(arg) => match arg.parse() {
+                Ok(kmer_len) if kmer_len > 0 => kmer_len,
+                Ok(_) => return Err("k-mer length needs to be larger than zero".into()),
+                Err(_) => return Err(format!("issue with k-mer length argument: {}", arg).into()),
+            },
+            None => return Err("k-mer length input required".into()),
+        };
 
         let filepath = match args.next() {
             Some(arg) => arg,
-            None => return Err("Issue with filepath input".into()),
+            None => return Err("filepath argument needed".into()),
         };
+
         Ok(Config { kmer_len, filepath })
     }
 }
@@ -89,28 +91,71 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 .seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
+                /*
+                        match &seq[i..i + k] {
+                            kmer if kmer_map.contains_key(&Box::from(kmer)) => {
+                                *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
+                            }
+                            &_ => match &seq[i..i + k] {
+                                kmer if !kmer_map.contains_key(&Box::from(kmer))
+                                    && !kmer.contains(&78_u8) =>
+                                {
+                                    match kmer {
+                                        kmer if revcomp(kmer).as_slice() > kmer => {
+                                            *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
+                                        }
+                                        not_canonical
+                                            if revcomp(not_canonical).as_slice() < not_canonical =>
+                                        {
+                                            *kmer_map
+                                                .entry(Box::from(revcomp(not_canonical)))
+                                                .or_insert(0) += 1
+                                        }
+                                        &_ => panic!("{}", "problem matching canonical kmer".to_string()),
+                                    }
+                                }
+                                &_ => continue,
+                            },
+                        }
+                */
                 match &seq[i..i + k] {
                     kmer if !kmer.contains(&78_u8) => match kmer {
                         kmer if kmer_map.contains_key(&Box::from(kmer)) => {
                             *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
                         }
-
                         kmer if revcomp(kmer).as_slice() > kmer => {
                             *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
                         }
-
                         not_canonical if revcomp(not_canonical).as_slice() < not_canonical => {
                             *kmer_map
                                 .entry(Box::from(revcomp(not_canonical)))
                                 .or_insert(0) += 1
                         }
-
-                        invalid if invalid.contains(&78_u8) => continue,
-
                         &_ => panic!("{}", "problem matching canonical kmer".to_string()),
                     },
                     &_ => continue,
                 }
+                /*
+                match &seq[i..i + k] {
+                            kmer if !kmer.contains(&78_u8) && kmer_map.contains_key(&Box::from(kmer)) => {
+                                    *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
+                            }
+                    kmer if !kmer.contains(&78_u8) && !kmer_map.contains_key(&Box::from(kmer)) => {
+                    match kmer {
+                                    kmer if revcomp(kmer).as_slice() > kmer => {
+                        *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
+                                    }
+                                    not_canonical if revcomp(not_canonical).as_slice() < not_canonical => {
+                        *kmer_map
+                                            .entry(Box::from(revcomp(not_canonical)))
+                                            .or_insert(0) += 1
+                                    }
+                                    &_ => panic!("{}", "problem matching canonical kmer".to_string()),
+                    }
+                    }
+                    &_ => continue,
+                        }
+                */
             }
         });
 

@@ -6,12 +6,6 @@ fn main() {
         process::exit(1);
     });
 
-    assert!(
-        config.kmer_len > 0,
-        "The requested k-mer length caused a problem. k = {}",
-        config.kmer_len
-    );
-
     if let Err(e) = krust::canonicalize_kmers(config.filepath, config.kmer_len) {
         eprintln!("Application error: {}", e);
         drop(e);
