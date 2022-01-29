@@ -22,7 +22,7 @@
 //! ```fn single_sequence_canonical_kmers(filepath: String, k: usize) {}```  
 //! Returns k-mer counts for individual sequences in a fasta file.  
 
-use bio::{alphabets::dna::revcomp, io::fasta};
+use bio::io::fasta;
 use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
@@ -34,7 +34,7 @@ use std::{
     str,
 };
 
-/// A simple struct for parsing command line k-size and filepath arguments.
+/// Parsing command line k-size and filepath arguments.
 pub struct Config {
     pub kmer_len: usize,
     pub filepath: String,
@@ -60,6 +60,51 @@ impl Config {
     }
 }
 
+// to do:
+/*
+pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
+    let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
+
+    let _ = fasta::Reader::from_file(&filepath)?
+        .records()
+        .into_iter()
+        .par_bridge()
+        .for_each(|r| {
+            let record = r.expect("error reading fasta record");
+
+            let seq: &[u8] = record.seq();
+
+        canonicalize_kmers(seq, k)?;
+    });
+    Ok(())
+}
+
+fn canonicalize_kmers(seq: &[u8], k: usize) -> Result<(), Box<dyn Error>> {
+
+}
+ */
+const VALID_BYTES: &[u8] = &[65_u8, 67_u8, 71_u8, 84_u8];
+
+fn dna_strand(dna: &[u8]) -> Vec<u8> {
+    let revcomp = dna
+        .iter()
+        .rev()
+        .map(|c| match *c {
+            67_u8 => 71_u8,
+            71_u8 => 67_u8,
+            84_u8 => 65_u8,
+            _ => 84_u8, //65_u8
+        })
+        .collect();
+    revcomp
+}
+
+fn is(bytes: &[u8]) -> bool {
+    bytes
+        .iter()
+	.all(|x| VALID_BYTES.contains(x))
+}
+
 /// A custom `DashMap` w/ `FxHasher`.  
 ///  
 /// ```use dashmap::DashMap;```  
@@ -82,88 +127,42 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
         .records()
         .into_iter()
         .par_bridge()
-        .for_each(|record| {
-            let seq: &[u8] = record
-                .as_ref()
-                .unwrap_or_else(|_| {
-                    panic!("{}", "problem getting fasta records from file".to_string())
-                })
-                .seq();
+        .for_each(|r| {
+            let record = r.expect("error reading fasta record");
+
+            let seq: &[u8] = record.seq();
 
             for i in 0..(seq.len() + 1).saturating_sub(k) {
-                /*
-                        match &seq[i..i + k] {
-                            kmer if kmer_map.contains_key(&Box::from(kmer)) => {
-                                *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
-                            }
-                            &_ => match &seq[i..i + k] {
-                                kmer if !kmer_map.contains_key(&Box::from(kmer))
-                                    && !kmer.contains(&78_u8) =>
-                                {
-                                    match kmer {
-                                        kmer if revcomp(kmer).as_slice() > kmer => {
-                                            *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
-                                        }
-                                        not_canonical
-                                            if revcomp(not_canonical).as_slice() < not_canonical =>
-                                        {
-                                            *kmer_map
-                                                .entry(Box::from(revcomp(not_canonical)))
-                                                .or_insert(0) += 1
-                                        }
-                                        &_ => panic!("{}", "problem matching canonical kmer".to_string()),
-                                    }
-                                }
-                                &_ => continue,
-                            },
-                        }
-                */
-                match &seq[i..i + k] {
-                    kmer if !kmer.contains(&78_u8) => match kmer {
-                        kmer if kmer_map.contains_key(&Box::from(kmer)) => {
-                            *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
-                        }
-                        kmer if revcomp(kmer).as_slice() > kmer => {
-                            *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
-                        }
-                        not_canonical if revcomp(not_canonical).as_slice() < not_canonical => {
-                            *kmer_map
-                                .entry(Box::from(revcomp(not_canonical)))
-                                .or_insert(0) += 1
-                        }
-                        &_ => panic!("{}", "problem matching canonical kmer".to_string()),
-                    },
-                    &_ => continue,
+                if kmer_map.contains_key(&Box::from(&seq[i..i + k])) {
+                    *kmer_map.get_mut(&Box::from(&seq[i..i + k])).unwrap() += 1;
+                    continue;
                 }
-                /*
+
                 match &seq[i..i + k] {
-                            kmer if !kmer.contains(&78_u8) && kmer_map.contains_key(&Box::from(kmer)) => {
-                                    *kmer_map.get_mut(&Box::from(kmer)).unwrap() += 1
-                            }
-                    kmer if !kmer.contains(&78_u8) && !kmer_map.contains_key(&Box::from(kmer)) => {
-                    match kmer {
-                                    kmer if revcomp(kmer).as_slice() > kmer => {
-                        *kmer_map.entry(Box::from(kmer)).or_insert(0) += 1
-                                    }
-                                    not_canonical if revcomp(not_canonical).as_slice() < not_canonical => {
-                        *kmer_map
-                                            .entry(Box::from(revcomp(not_canonical)))
-                                            .or_insert(0) += 1
-                                    }
-                                    &_ => panic!("{}", "problem matching canonical kmer".to_string()),
-                    }
-                    }
-                    &_ => continue,
+                    valid if is(valid) => match dna_strand(valid) {
+                        x if x.as_slice() < &seq[i..i + k] => {
+                            *kmer_map.entry(Box::from(x)).or_insert(0) += 1
                         }
-                */
+                        _ => {
+   
+                            *kmer_map.entry(Box::from(&seq[i..i + k])).or_insert(0) += 1
+                        }
+                    },
+                    _ => continue,
+                }
             }
         });
 
     let mut buf = BufWriter::new(std::io::stdout());
 
     kmer_map.into_iter().for_each(|(kmer, count)| {
-        writeln!(buf, ">{}\n{}", count, str::from_utf8(&kmer).unwrap())
-            .expect("Unable to write output");
+        writeln!(
+            buf,
+            ">{}\n{}",
+            count,
+            str::from_utf8(&kmer).expect("couldn't convert k-mer to readable format")
+        )
+        .expect("unable to write output");
     });
     buf.flush()?;
     Ok(())
