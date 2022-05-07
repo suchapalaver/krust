@@ -31,7 +31,6 @@ use std::{
     error::Error,
     hash::BuildHasherDefault,
     io::{BufWriter, Write},
-    str,
 };
 
 /// Parsing command line k-size and filepath arguments.
@@ -42,7 +41,8 @@ pub struct Config {
 
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
-        let kmer_len: usize = match args.nth(1) {
+
+	let kmer_len: usize = match args.nth(1) {
             Some(arg) => match arg.parse() {
                 Ok(kmer_len) if kmer_len > 0 => kmer_len,
                 Ok(_) => return Err("k-mer length needs to be larger than zero".into()),
@@ -60,32 +60,7 @@ impl Config {
     }
 }
 
-// to do:
-/*
-pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
-    let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
-
-    let _ = fasta::Reader::from_file(&filepath)?
-        .records()
-        .into_iter()
-        .par_bridge()
-        .for_each(|r| {
-            let record = r.expect("error reading fasta record");
-
-            let seq: &[u8] = record.seq();
-
-        canonicalize_kmers(seq, k)?;
-    });
-    Ok(())
-}
-
-fn canonicalize_kmers(seq: &[u8], k: usize) -> Result<(), Box<dyn Error>> {
-
-}
- */
-const VALID_BYTES: &[u8] = &[65_u8, 67_u8, 71_u8, 84_u8];
-
-fn dna_strand(dna: &[u8]) -> Vec<u8> {
+fn reverse(dna: &[u8]) -> Vec<u8> {
     let revcomp = dna
         .iter()
         .rev()
@@ -99,10 +74,46 @@ fn dna_strand(dna: &[u8]) -> Vec<u8> {
     revcomp
 }
 
-fn is(bytes: &[u8]) -> bool {
-    bytes
-        .iter()
-	.all(|x| VALID_BYTES.contains(x))
+struct BP(u16);
+
+impl BP {
+    fn new(sub: &[u8]) -> BP {
+	let bitpacked_kmer = sub.iter().fold(0_u16, |mut k, byte| {
+            k <<= 2;
+	    let mask = match byte {
+                b'A' => 0,
+                b'C' => 1,
+                b'G' => 2,
+                b'T' => 3,
+                _    => panic!("Won't happen!"),
+            };
+            k | mask
+        });
+	BP(bitpacked_kmer)
+    }
+}
+
+struct PK((Vec<u8>, i32));
+
+impl PK {
+    fn new(pair: (u16, i32), k: usize) -> PK {
+	let mut byte_string = Vec::new();
+        for i in 0..k {
+            let c = {
+                let isolate = pair.0 << ((i * 2) + 16 - (k * 2)); // 6 = bits(16) - k*2
+                let base = isolate >> 14;
+                match base {
+                    0 => b'A',
+                    1 => b'C',
+                    2 => b'G',
+                    3 => b'T',
+                    _ => panic!("Won't ever happen!"),
+                }
+            };
+            byte_string.push(c);
+        }
+        PK((byte_string, pair.1))
+    }
 }
 
 /// A custom `DashMap` w/ `FxHasher`.  
@@ -112,7 +123,7 @@ fn is(bytes: &[u8]) -> bool {
 /// ```// skip```  
 /// ```let dashfx_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
-pub type DashFx = DashMap<Box<[u8]>, u32, BuildHasherDefault<FxHasher>>;
+pub type DashFx = DashMap<u16, i32, BuildHasherDefault<FxHasher>>;
 
 ///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
@@ -122,46 +133,42 @@ pub type DashFx = DashMap<Box<[u8]>, u32, BuildHasherDefault<FxHasher>>;
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
 pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
-
     let _ = fasta::Reader::from_file(&filepath)?
         .records()
         .into_iter()
         .par_bridge()
         .for_each(|r| {
             let record = r.expect("error reading fasta record");
-
             let seq: &[u8] = record.seq();
 
-            for i in 0..(seq.len() + 1).saturating_sub(k) {
-                if kmer_map.contains_key(&Box::from(&seq[i..i + k])) {
-                    *kmer_map.get_mut(&Box::from(&seq[i..i + k])).unwrap() += 1;
-                    continue;
-                }
-
-                match &seq[i..i + k] {
-                    valid if is(valid) => match dna_strand(valid) {
-                        x if x.as_slice() < &seq[i..i + k] => {
-                            *kmer_map.entry(Box::from(x)).or_insert(0) += 1
-                        }
-                        _ => {
-   
-                            *kmer_map.entry(Box::from(&seq[i..i + k])).or_insert(0) += 1
-                        }
-                    },
-                    _ => continue,
-                }
-            }
-        });
+	    let mut i = 0;
+	    while i <= seq.len() - k {
+		let sub = &seq[i..i + k];
+		if sub.contains(&b'N') {
+		    i += k - 1;
+		} else {
+		    // get revcomp
+		    let x = reverse(sub);
+		    let bitpacked_kmer = {
+			if x.as_slice() < sub {
+			    BP::new(&x)
+			} else {
+			    BP::new(sub)
+			}};
+		    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
+		    i += 1;
+		}
+	    }
+	});
 
     let mut buf = BufWriter::new(std::io::stdout());
 
-    kmer_map.into_iter().for_each(|(kmer, count)| {
-        writeln!(
-            buf,
-            ">{}\n{}",
-            count,
-            str::from_utf8(&kmer).expect("couldn't convert k-mer to readable format")
-        )
+    kmer_map.into_iter()
+	.map(|pair| {
+	    PK::new(pair, k).0
+        })
+        .for_each(|(kmer, count)| {
+            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer).unwrap())
         .expect("unable to write output");
     });
     buf.flush()?;
