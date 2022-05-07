@@ -19,8 +19,9 @@
 //! ```$ cargo run --release 21 cerevisae.pan.fa > output.tsv```  
 //!
 //! Future:  
-//! ```fn single_sequence_canonical_kmers(filepath: String, k: usize) {}```  
-//! Returns k-mer counts for individual sequences in a fasta file.  
+//! - ```fn single_sequence_canonical_kmers(filepath: String, k: usize) {}```  
+//! Returns k-mer counts for individual sequences in a fasta file.
+//! - Testing!
 
 use bio::io::fasta;
 use dashmap::DashMap;
@@ -44,8 +45,8 @@ impl Config {
 
 	let kmer_len: usize = match args.nth(1) {
             Some(arg) => match arg.parse() {
-                Ok(kmer_len) if kmer_len > 0 => kmer_len,
-                Ok(_) => return Err("k-mer length needs to be larger than zero".into()),
+                Ok(kmer_len) if kmer_len > 0 && kmer_len < 33 => kmer_len,
+                Ok(_) => return Err("k-mer length needs to be larger than zero and, for `krust` in its current working form, no more than 32".into()),
                 Err(_) => return Err(format!("issue with k-mer length argument: {}", arg).into()),
             },
             None => return Err("k-mer length input required".into()),
@@ -74,11 +75,11 @@ fn reverse(dna: &[u8]) -> Vec<u8> {
     revcomp
 }
 
-struct BP(u16);
+struct BP(u64);
 
 impl BP {
     fn new(sub: &[u8]) -> BP {
-	let bitpacked_kmer = sub.iter().fold(0_u16, |mut k, byte| {
+	let bitpacked_kmer = sub.iter().fold(0, |mut k, byte| {
             k <<= 2;
 	    let mask = match byte {
                 b'A' => 0,
@@ -96,12 +97,12 @@ impl BP {
 struct PK((Vec<u8>, i32));
 
 impl PK {
-    fn new(pair: (u16, i32), k: usize) -> PK {
+    fn new(pair: (u64, i32), k: usize) -> PK {
 	let mut byte_string = Vec::new();
         for i in 0..k {
             let c = {
-                let isolate = pair.0 << ((i * 2) + 16 - (k * 2)); // 6 = bits(16) - k*2
-                let base = isolate >> 14;
+                let isolate = pair.0 << ((i * 2) + 64 - (k * 2));
+                let base = isolate >> 62;
                 match base {
                     0 => b'A',
                     1 => b'C',
@@ -123,7 +124,7 @@ impl PK {
 /// ```// skip```  
 /// ```let dashfx_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
-pub type DashFx = DashMap<u16, i32, BuildHasherDefault<FxHasher>>;
+pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
 ///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
@@ -149,6 +150,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 		} else {
 		    // get revcomp
 		    let x = reverse(sub);
+		    // bitpack 'canonical kmer'
 		    let bitpacked_kmer = {
 			if x.as_slice() < sub {
 			    BP::new(&x)
@@ -164,13 +166,12 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
     let mut buf = BufWriter::new(std::io::stdout());
 
     kmer_map.into_iter()
-	.map(|pair| {
-	    PK::new(pair, k).0
-        })
+	.map(|pair| PK::new(pair, k).0)
         .for_each(|(kmer, count)| {
             writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer).unwrap())
         .expect("unable to write output");
     });
     buf.flush()?;
+    
     Ok(())
 }
