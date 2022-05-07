@@ -77,21 +77,7 @@ impl RevCompKmer {
         )
     }
 }
-/*
-fn reverse(dna: &[u8]) -> Vec<u8> {
-    let revcomp = dna
-        .iter()
-        .rev()
-        .map(|c| match *c {
-            67_u8 => 71_u8,
-            71_u8 => 67_u8,
-            84_u8 => 65_u8,
-            _ => 84_u8, //65_u8
-        })
-        .collect();
-    revcomp
-}
-*/
+
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
