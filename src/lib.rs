@@ -60,6 +60,24 @@ impl Config {
     }
 }
 
+pub struct RevCompKmer(Vec<u8>);
+
+impl RevCompKmer {
+    fn new(sub: &[u8]) -> RevCompKmer {
+        RevCompKmer(
+            sub.iter()
+                .rev()
+                .map(|c| match *c {
+                    67_u8 => 71_u8,
+                    71_u8 => 67_u8,
+                    84_u8 => 65_u8,
+                    _ => 84_u8, //65_u8
+                })
+                .collect(),
+        )
+    }
+}
+/*
 fn reverse(dna: &[u8]) -> Vec<u8> {
     let revcomp = dna
         .iter()
@@ -73,7 +91,7 @@ fn reverse(dna: &[u8]) -> Vec<u8> {
         .collect();
     revcomp
 }
-
+*/
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
@@ -148,10 +166,10 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 if sub.contains(&b'N') {
                     i += k - 1;
                 } else {
-                    let x = reverse(sub);
+                    let revcompkmer = &RevCompKmer::new(sub).0[..];
                     let bitpacked_kmer = {
-                        if x.as_slice() < sub {
-                            BitpackedKmer::new(&x)
+                        if revcompkmer < sub {
+                            BitpackedKmer::new(revcompkmer)
                         } else {
                             BitpackedKmer::new(sub)
                         }
