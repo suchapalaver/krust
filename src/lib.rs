@@ -42,8 +42,7 @@ pub struct Config {
 
 impl Config {
     pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
-
-	let kmer_len: usize = match args.nth(1) {
+        let kmer_len: usize = match args.nth(1) {
             Some(arg) => match arg.parse() {
                 Ok(kmer_len) if kmer_len > 0 && kmer_len < 33 => kmer_len,
                 Ok(_) => return Err("k-mer length needs to be larger than zero and, for `krust` in its current working form, no more than 32".into()),
@@ -75,30 +74,31 @@ fn reverse(dna: &[u8]) -> Vec<u8> {
     revcomp
 }
 
-struct BP(u64);
+/// Compressing k-mers, bitpacking them into unsigned integers.
+struct BitpackedKmer(u64);
 
-impl BP {
-    fn new(sub: &[u8]) -> BP {
-	let bitpacked_kmer = sub.iter().fold(0, |mut k, byte| {
+impl BitpackedKmer {
+    fn new(sub: &[u8]) -> BitpackedKmer {
+        BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
             k <<= 2;
-	    let mask = match byte {
+            let mask = match byte {
                 b'A' => 0,
                 b'C' => 1,
                 b'G' => 2,
                 b'T' => 3,
-                _    => panic!("Won't happen!"),
+                _ => panic!("Won't happen!"),
             };
             k | mask
-        });
-	BP(bitpacked_kmer)
+        }))
     }
 }
 
-struct PK((Vec<u8>, i32));
+/// Unpacking compressed k-mer data.
+struct UnpackedKmerData((Vec<u8>, i32));
 
-impl PK {
-    fn new(pair: (u64, i32), k: usize) -> PK {
-	let mut byte_string = Vec::new();
+impl UnpackedKmerData {
+    fn new(pair: (u64, i32), k: usize) -> UnpackedKmerData {
+        let mut byte_string = Vec::new();
         for i in 0..k {
             let c = {
                 let isolate = pair.0 << ((i * 2) + 64 - (k * 2));
@@ -113,7 +113,7 @@ impl PK {
             };
             byte_string.push(c);
         }
-        PK((byte_string, pair.1))
+        UnpackedKmerData((byte_string, pair.1))
     }
 }
 
@@ -142,36 +142,36 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
             let record = r.expect("error reading fasta record");
             let seq: &[u8] = record.seq();
 
-	    let mut i = 0;
-	    while i <= seq.len() - k {
-		let sub = &seq[i..i + k];
-		if sub.contains(&b'N') {
-		    i += k - 1;
-		} else {
-		    // get revcomp
-		    let x = reverse(sub);
-		    // bitpack 'canonical kmer'
-		    let bitpacked_kmer = {
-			if x.as_slice() < sub {
-			    BP::new(&x)
-			} else {
-			    BP::new(sub)
-			}};
-		    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
-		    i += 1;
-		}
-	    }
-	});
+            let mut i = 0;
+            while i <= seq.len() - k {
+                let sub = &seq[i..i + k];
+                if sub.contains(&b'N') {
+                    i += k - 1;
+                } else {
+                    let x = reverse(sub);
+                    let bitpacked_kmer = {
+                        if x.as_slice() < sub {
+                            BitpackedKmer::new(&x)
+                        } else {
+                            BitpackedKmer::new(sub)
+                        }
+                    };
+                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
+                    i += 1;
+                }
+            }
+        });
 
     let mut buf = BufWriter::new(std::io::stdout());
 
-    kmer_map.into_iter()
-	.map(|pair| PK::new(pair, k).0)
+    kmer_map
+        .into_iter()
+        .map(|pair| UnpackedKmerData::new(pair, k).0)
         .for_each(|(kmer, count)| {
             writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer).unwrap())
-        .expect("unable to write output");
-    });
+                .expect("unable to write output");
+        });
     buf.flush()?;
-    
+
     Ok(())
 }
