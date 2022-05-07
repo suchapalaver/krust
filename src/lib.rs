@@ -74,8 +74,8 @@ fn reverse(dna: &[u8]) -> Vec<u8> {
     revcomp
 }
 
-/// Compressing k-mers, bitpacking them into unsigned integers.
-struct BitpackedKmer(u64);
+/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
+pub struct BitpackedKmer(u64);
 
 impl BitpackedKmer {
     fn new(sub: &[u8]) -> BitpackedKmer {
@@ -93,8 +93,8 @@ impl BitpackedKmer {
     }
 }
 
-/// Unpacking compressed k-mer data.
-struct UnpackedKmerData((Vec<u8>, i32));
+/// Unpacking compressed, bitpacked k-mer data.
+pub struct UnpackedKmerData((Vec<u8>, i32));
 
 impl UnpackedKmerData {
     fn new(pair: (u64, i32), k: usize) -> UnpackedKmerData {
