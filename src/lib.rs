@@ -152,6 +152,7 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
 pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
+
     let _ = fasta::Reader::from_file(&filepath)?
         .records()
         .into_iter()
@@ -179,7 +180,6 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
         });
 
     let mut buf = BufWriter::new(std::io::stdout());
-
     kmer_map
         .into_iter()
         .map(|pair| UnpackedKmerData::new(pair, k).0)
