@@ -14,4 +14,4 @@ or, searching for kmers of length 21:
 
 `krust` uses the [`rust-bio`](https://docs.rs/bio/0.38.0/bio/), [`rayon`](https://docs.rs/rayon/1.5.1/rayon/), and [`dashmap`](https://docs.rs/crate/dashmap/4.0.2) Rust libraries.  
     
-* Unusual, yes, to provide this data in the repo, but it's helped me spread word about what I'm doing.
+*Unusual, yes, to provide this data in the repo, but it's helped me spread word about what I'm doing.
