@@ -62,7 +62,6 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 
             let mut i = 0;
             while i <= seq.len() - k {
-                //let kmer = Kmer::from(&seq[i..i + k]);
                 let sub = &seq[i..i + k];
                 let bytestring = Kmer::try_from(sub);
                 match bytestring.is_ok() {
@@ -75,9 +74,17 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
                         *kmer_map.entry(kmer).or_insert(0) += 1;
                         i += 1;
                     }
-                    false => i += 1,
-                }
-            }
+                    false => {
+			let mut position: usize = 0;
+			sub.iter().rev().enumerate().for_each(|(pos, byte)| {
+			    if byte != &(b'A' | b'C' | b'G' | b'T') {
+				position = pos;
+			    }
+			});
+			i += position;
+		    },
+		}
+	    }
         });
 
     let mut buf = BufWriter::new(std::io::stdout());
