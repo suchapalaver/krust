@@ -73,21 +73,15 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
     let mut buf = BufWriter::new(std::io::stdout());
     kmer_map
         .into_iter()
-        .map(|pair| {
-            let byte_string = UnpackedKmer::from((pair.0, k));
-            (byte_string, pair.1)
-        })
+        .map(|pair| (UnpackedKmer::from((pair.0, k)), pair.1))
         .for_each(|(kmer, count)| {
             writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer.0).unwrap())
-                .expect("unable to write output");
+                .expect("Unable to write output.");
         });
     buf.flush()?;
 
     Ok(())
 }
-
-/// Ascertains the [canonical k-mer](https://bioinfologics.github.io/post/2018/09/17/k-mer-counting-part-i-introduction/) of a DNA string slice.
-pub struct CanonKmer(Vec<u8>);
 
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
@@ -97,15 +91,20 @@ impl From<&[u8]> for RevCompKmer {
         RevCompKmer(
             sub.iter()
                 .rev()
-                .map(|c| match *c {
-                    67_u8 => 71_u8,
-                    71_u8 => 67_u8,
-                    84_u8 => 65_u8,
-                    65_u8 => 84_u8,
-                    _ => b'Z',
-                })
+                .map(|byte| RevCompKmer::complement(*byte))
                 .collect::<Vec<u8>>(),
         )
+    }
+}
+
+impl RevCompKmer {
+    fn complement(byte: u8) -> u8 {
+	match byte {
+	    67_u8 => 71_u8,
+            71_u8 => 67_u8,
+            84_u8 => 65_u8,
+            _ => 84_u8, // 65_u8
+	}
     }
 }
 
