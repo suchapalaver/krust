@@ -66,12 +66,15 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 let sub = &seq[i..i + k];
                 if !sub.contains(&b'N') {
 		    let revcompkmer = RevCompKmer::from(sub);
-		    let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
+		    let canonical_kmer = CanonicalKmer::from((revcompkmer, sub));
+		    /*
+{
 			true => revcompkmer.0,
 			false => sub.to_vec(),
 		    };
-                    let bitpacked_kmer = BitpackedKmer::from(canonical_kmer);
-                    *kmer_map.entry(bitpacked_kmer.into()).or_insert(0) += 1;
+*/
+                    let bitpacked_kmer = BitpackedKmer::from(canonical_kmer.0);
+                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
                 }
                 i += 1;
             }
@@ -113,12 +116,6 @@ impl From<Vec<u8>> for BitpackedKmer {
     }
 }
 
-impl Into<u64> for BitpackedKmer {
-    fn into(self) -> u64 {
-	self.0
-    }
-}
-
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
@@ -144,6 +141,18 @@ impl RevCompKmer {
     }
 }
 
+pub struct CanonicalKmer(Vec<u8>);
+
+impl From<(RevCompKmer, &[u8])> for CanonicalKmer {
+    fn from(comp: (RevCompKmer, &[u8])) -> Self {
+	let canonical_kmer = match comp.0.0 < comp.1.to_vec() {
+	    true => comp.0.0,
+	    false => comp.1.to_vec(),
+	};
+	CanonicalKmer(canonical_kmer)
+    }
+}
+
 /// Unpacking compressed, bitpacked k-mer data.
 pub struct UnpackedKmer(Vec<u8>);
 
@@ -155,7 +164,7 @@ impl From<(u64, usize)> for UnpackedKmer {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
             let byte = UnpackedKmerByte::from(base);
-            byte_string.push(byte.into());
+            byte_string.push(byte.0);
         }
         UnpackedKmer(byte_string)
     }
@@ -172,12 +181,6 @@ impl From<u64> for UnpackedKmerByte {
             2 => UnpackedKmerByte(b'G'),
             _ => UnpackedKmerByte(b'T'), // 3
         }
-    }
-}
-
-impl Into<u8> for UnpackedKmerByte {
-    fn into(self) -> u8 {
-	self.0
     }
 }
 
