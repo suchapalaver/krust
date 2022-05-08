@@ -63,8 +63,8 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             let mut i = 0;
             while i <= seq.len() - k {
                 let sub = &seq[i..i + k];
-                let bytestring = Kmer::try_from(sub);
-                match bytestring.is_ok() {
+		let bytestring = Kmer::try_from(sub);
+		match bytestring.is_ok() {
                     true => {
                         let Kmer(bytestring) = bytestring.unwrap();
                         let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
@@ -76,12 +76,12 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
                     }
                     false => {
 			let mut position: usize = 0;
-			sub.iter().rev().enumerate().for_each(|(pos, byte)| {
+			sub.iter().enumerate().for_each(|(pos, byte)| {
 			    if byte != &(b'A' | b'C' | b'G' | b'T') {
 				position = pos;
 			    }
 			});
-			i += position;
+			i += position + 1;
 		    },
 		}
 	    }
@@ -104,13 +104,13 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
+#[derive(Debug)]
 pub struct Kmer(Vec<u8>);
 
 impl TryFrom<&[u8]> for Kmer {
     type Error = ();
     fn try_from(sub: &[u8]) -> Result<Kmer, ()> {
-        match !sub.contains(&(b'A' | b'C' | b'G' | b'T')) {
+        match !sub.contains(&b'N') {
             true => Ok(Kmer(sub.to_vec())),
             false => Err(()),
         }
