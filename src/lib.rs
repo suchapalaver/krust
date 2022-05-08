@@ -67,12 +67,6 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 if !sub.contains(&b'N') {
 		    let revcompkmer = RevCompKmer::from(sub);
 		    let canonical_kmer = CanonicalKmer::from((revcompkmer, sub));
-		    /*
-{
-			true => revcompkmer.0,
-			false => sub.to_vec(),
-		    };
-*/
                     let bitpacked_kmer = BitpackedKmer::from(canonical_kmer.0);
                     *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
                 }
