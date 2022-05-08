@@ -95,13 +95,6 @@ pub struct BitpackedKmer(u64);
 
 impl From<Vec<u8>> for BitpackedKmer {
     fn from(sub: Vec<u8>) -> Self {
-        /*
-	let revcompkmer = RevCompKmer::from(sub);
-        let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
-            true => revcompkmer.0,
-            false => sub.to_vec(),
-        };
-	*/
         let bitpacked_kmer: u64 = {
             let mut k: u64 = 0;
             for byte in sub.iter() {
