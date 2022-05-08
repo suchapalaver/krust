@@ -49,7 +49,7 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 /// hashmap of canonical k-mers (keys) and their frequency in the data (values).  
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
-pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
+pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
     let _ = fasta::Reader::from_file(&filepath)?

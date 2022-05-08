@@ -6,7 +6,7 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(e) = krust::canonicalize_kmers(config.filepath, config.kmer_len) {
+    if let Err(e) = krust::run(config.filepath, config.kmer_len) {
         eprintln!("Application error: {}", e);
         drop(e);
         process::exit(1);
