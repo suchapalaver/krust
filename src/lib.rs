@@ -62,7 +62,9 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 
             let mut i = 0;
             while i <= seq.len() - k {
-                let sub = &seq[i..i + k];
+		let bitpacked_kmer = BitpackedKmer::from(&seq[i..i +k]);
+/*
+		let sub = &seq[i..i + k];
 
                 if sub.contains(&b'N') {
                     i += k - 1;
@@ -70,11 +72,10 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                     let canonical_kmer = CanonKmer::from(sub);
 
                     let bitpacked_kmer = BitpackedKmer::from(&canonical_kmer.0[..]);
+*/
+                *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
 
-                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
-
-                    i += 1;
-                }
+                i += 1;
             }
         });
 
@@ -96,7 +97,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 
 /// Ascertains the [canonical k-mer](https://bioinfologics.github.io/post/2018/09/17/k-mer-counting-part-i-introduction/) of a DNA string slice.
 pub struct CanonKmer(Vec<u8>);
-
+/*
 impl From<&[u8]> for CanonKmer {
     fn from(sub: &[u8]) -> Self {
         let revcompkmer = RevCompKmer::from(sub);
@@ -106,6 +107,7 @@ impl From<&[u8]> for CanonKmer {
         }
     }
 }
+*/
 
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
@@ -132,7 +134,12 @@ pub struct BitpackedKmer(u64);
 
 impl From<&[u8]> for BitpackedKmer {
     fn from(sub: &[u8]) -> Self {
-        BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
+	let revcompkmer = RevCompKmer::from(sub);
+        let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
+            true => CanonKmer(revcompkmer.0),
+            false => CanonKmer(sub.to_vec()),
+        };
+        BitpackedKmer(canonical_kmer.0.iter().fold(0, |mut k, byte| {
             k <<= 2;
             let mask = match byte {
                 b'A' => 0,
