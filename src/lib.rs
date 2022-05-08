@@ -67,7 +67,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 if sub.contains(&b'N') {
                     i += k - 1;
                 } else {
-                    let canonical_kmer = CanonKmer::new(sub);
+                    let canonical_kmer = CanonKmer::try_from(sub).unwrap();
 
                     let bitpacked_kmer = BitpackedKmer::new(&canonical_kmer.0);
 
@@ -94,12 +94,14 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 /// Ascertains the [canonical k-mer](https://bioinfologics.github.io/post/2018/09/17/k-mer-counting-part-i-introduction/) of a DNA string slice.
 pub struct CanonKmer(Vec<u8>);
 
-impl CanonKmer {
-    fn new(sub: &[u8]) -> CanonKmer {
-        let revcompkmer = RevCompKmer::try_from(sub).unwrap();
+impl TryFrom<&[u8]> for CanonKmer {
+    type Error = &'static str;
+
+    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
+	let revcompkmer = RevCompKmer::try_from(sub).unwrap();
         match revcompkmer.0 < sub.to_vec() {
-            true => CanonKmer(revcompkmer.0),
-            false => CanonKmer(sub.to_vec()),
+            true => Ok(CanonKmer(revcompkmer.0)),
+            false => Ok(CanonKmer(sub.to_vec())),
         }
     }
 }
