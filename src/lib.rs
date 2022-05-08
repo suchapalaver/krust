@@ -65,7 +65,12 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 // Make more efficient by skipping to position of 'N'
                 let sub = &seq[i..i + k];
                 if !sub.contains(&b'N') {
-                    let bitpacked_kmer = BitpackedKmer::from(&seq[i..i + k]);
+		    let revcompkmer = RevCompKmer::from(sub);
+		    let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
+			true => revcompkmer.0,
+			false => sub.to_vec(),
+		    };
+                    let bitpacked_kmer = BitpackedKmer::from(canonical_kmer);
                     *kmer_map.entry(bitpacked_kmer.into()).or_insert(0) += 1;
                 }
                 i += 1;
@@ -88,16 +93,18 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
-impl From<&[u8]> for BitpackedKmer {
-    fn from(sub: &[u8]) -> Self {
-        let revcompkmer = RevCompKmer::from(sub);
+impl From<Vec<u8>> for BitpackedKmer {
+    fn from(sub: Vec<u8>) -> Self {
+        /*
+	let revcompkmer = RevCompKmer::from(sub);
         let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
             true => revcompkmer.0,
             false => sub.to_vec(),
         };
+	*/
         let bitpacked_kmer: u64 = {
             let mut k: u64 = 0;
-            for byte in canonical_kmer.iter() {
+            for byte in sub.iter() {
                 k <<= 2;
                 let mask = match *byte {
                     b'A' => 0,
