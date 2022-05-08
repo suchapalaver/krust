@@ -66,9 +66,9 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 let sub = &seq[i..i + k];
                 if !sub.contains(&b'N') {
 		    let revcompkmer = RevCompKmer::from(sub);
-		    let canonical_kmer = CanonicalKmer::from((revcompkmer, sub));
-                    let bitpacked_kmer = BitpackedKmer::from(canonical_kmer.0);
-                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
+		    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, sub));
+                    let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
+                    *kmer_map.entry(kmer).or_insert(0) += 1;
                 }
                 i += 1;
             }
@@ -78,8 +78,8 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
     kmer_map
         .into_iter()
         .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
-        .for_each(|(kmer, count)| {
-            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(kmer.0.as_slice()).unwrap())
+        .for_each(|(UnpackedKmer(kmer), count)| {
+            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(kmer.as_slice()).unwrap())
                 .expect("Unable to write output.");
         });
     buf.flush()?;
