@@ -69,7 +69,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 } else {
                     let canonical_kmer = CanonKmer::try_from(sub).unwrap();
 
-                    let bitpacked_kmer = BitpackedKmer::new(&canonical_kmer.0);
+                    let bitpacked_kmer = BitpackedKmer::try_from(&canonical_kmer.0[..]).unwrap();
 
                     *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
 
@@ -98,7 +98,7 @@ impl TryFrom<&[u8]> for CanonKmer {
     type Error = &'static str;
 
     fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
-	let revcompkmer = RevCompKmer::try_from(sub).unwrap();
+        let revcompkmer = RevCompKmer::try_from(sub).unwrap();
         match revcompkmer.0 < sub.to_vec() {
             true => Ok(CanonKmer(revcompkmer.0)),
             false => Ok(CanonKmer(sub.to_vec())),
@@ -134,9 +134,11 @@ impl TryFrom<&[u8]> for RevCompKmer {
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
-impl BitpackedKmer {
-    fn new(sub: &[u8]) -> BitpackedKmer {
-        BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
+impl TryFrom<&[u8]> for BitpackedKmer {
+    type Error = &'static str;
+
+    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
+        Ok(BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
             k <<= 2;
             let mask = match byte {
                 b'A' => 0,
@@ -146,7 +148,7 @@ impl BitpackedKmer {
                 _ => panic!("Won't happen!"),
             };
             k | mask
-        }))
+        })))
     }
 }
 
