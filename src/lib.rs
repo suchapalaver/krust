@@ -149,7 +149,7 @@ impl From<(u64, usize)> for UnpackedKmer {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
             let byte = UnpackedKmerByte::from(base);
-            byte_string.push(byte.0);
+            byte_string.push(byte.into());
         }
         UnpackedKmer(byte_string)
     }
@@ -166,6 +166,12 @@ impl From<u64> for UnpackedKmerByte {
             2 => UnpackedKmerByte(b'G'),
             _ => UnpackedKmerByte(b'T'), // 3
         }
+    }
+}
+
+impl Into<u8> for UnpackedKmerByte {
+    fn into(self) -> u8 {
+	self.0
     }
 }
 
