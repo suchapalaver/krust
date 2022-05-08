@@ -77,7 +77,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
         .into_iter()
         .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
         .for_each(|(kmer, count)| {
-            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer.0).unwrap())
+            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(kmer.0.as_slice()).unwrap())
                 .expect("Unable to write output.");
         });
     buf.flush()?;
