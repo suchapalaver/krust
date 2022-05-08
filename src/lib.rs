@@ -66,7 +66,7 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 let sub = &seq[i..i + k];
                 if !sub.contains(&b'N') {
                     let bitpacked_kmer = BitpackedKmer::from(&seq[i..i + k]);
-                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
+                    *kmer_map.entry(bitpacked_kmer.into()).or_insert(0) += 1;
                 }
                 i += 1;
             }
@@ -110,6 +110,12 @@ impl From<&[u8]> for BitpackedKmer {
             k
         };
         BitpackedKmer(bitpacked_kmer)
+    }
+}
+
+impl Into<u64> for BitpackedKmer {
+    fn into(self) -> u64 {
+	self.0
     }
 }
 
