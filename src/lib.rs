@@ -62,10 +62,12 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 
             let mut i = 0;
             while i <= seq.len() - k {
-		let bitpacked_kmer = BitpackedKmer::from(&seq[i..i +k]);
-
-                *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
-
+                // Make more efficient by skipping to position of 'N'
+                let sub = &seq[i..i + k];
+                if !sub.contains(&b'N') {
+                    let bitpacked_kmer = BitpackedKmer::from(&seq[i..i + k]);
+                    *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
+                }
                 i += 1;
             }
         });
@@ -81,6 +83,34 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
     buf.flush()?;
 
     Ok(())
+}
+
+/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
+pub struct BitpackedKmer(u64);
+
+impl From<&[u8]> for BitpackedKmer {
+    fn from(sub: &[u8]) -> Self {
+        let revcompkmer = RevCompKmer::from(sub);
+        let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
+            true => revcompkmer.0,
+            false => sub.to_vec(),
+        };
+        let bitpacked_kmer: u64 = {
+            let mut k: u64 = 0;
+            for byte in canonical_kmer.iter() {
+                k <<= 2;
+                let mask = match *byte {
+                    b'A' => 0,
+                    b'C' => 1,
+                    b'G' => 2,
+                    _ => 3, // b'T'
+                };
+                k |= mask;
+            }
+            k
+        };
+        BitpackedKmer(bitpacked_kmer)
+    }
 }
 
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
@@ -99,36 +129,12 @@ impl From<&[u8]> for RevCompKmer {
 
 impl RevCompKmer {
     fn complement(byte: u8) -> u8 {
-	match byte {
-	    67_u8 => 71_u8,
+        match byte {
+            67_u8 => 71_u8,
             71_u8 => 67_u8,
             84_u8 => 65_u8,
             _ => 84_u8, // 65_u8
-	}
-    }
-}
-
-/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
-pub struct BitpackedKmer(u64);
-
-impl From<&[u8]> for BitpackedKmer {
-    fn from(sub: &[u8]) -> Self {
-	let revcompkmer = RevCompKmer::from(sub);
-        let canonical_kmer = match revcompkmer.0 < sub.to_vec() {
-            true => revcompkmer.0,
-            false => sub.to_vec(),
-        };
-        BitpackedKmer(canonical_kmer.iter().fold(0, |mut k, byte| {
-            k <<= 2;
-            let mask = match byte {
-                b'A' => 0,
-                b'C' => 1,
-                b'G' => 2,
-                b'T' => 3,
-                _ => panic!("Won't happen!"),
-            };
-            k | mask
-        }))
+        }
     }
 }
 
@@ -142,7 +148,7 @@ impl From<(u64, usize)> for UnpackedKmer {
         for i in 0..k {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
-            let byte = UnpackedKmerByte::try_from(base).unwrap();
+            let byte = UnpackedKmerByte::from(base);
             byte_string.push(byte.0);
         }
         UnpackedKmer(byte_string)
@@ -152,16 +158,13 @@ impl From<(u64, usize)> for UnpackedKmer {
 /// Unpacking compressed, bitpacked k-mer data.
 pub struct UnpackedKmerByte(u8);
 
-impl TryFrom<u64> for UnpackedKmerByte {
-    type Error = &'static str;
-
-    fn try_from(base: u64) -> Result<Self, Self::Error> {
+impl From<u64> for UnpackedKmerByte {
+    fn from(base: u64) -> Self {
         match base {
-            0 => Ok(UnpackedKmerByte(b'A')),
-            1 => Ok(UnpackedKmerByte(b'C')),
-            2 => Ok(UnpackedKmerByte(b'G')),
-            3 => Ok(UnpackedKmerByte(b'T')),
-            _ => Err("Won't ever happen!"),
+            0 => UnpackedKmerByte(b'A'),
+            1 => UnpackedKmerByte(b'C'),
+            2 => UnpackedKmerByte(b'G'),
+            _ => UnpackedKmerByte(b'T'), // 3
         }
     }
 }
