@@ -5,3 +5,4 @@ output.tsv
 output/
 reddit_feedback.txt
 revcomp_issue.txt
+.idea/
