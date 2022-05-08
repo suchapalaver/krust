@@ -67,9 +67,9 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
                 if sub.contains(&b'N') {
                     i += k - 1;
                 } else {
-                    let canonical_kmer = CanonKmer::try_from(sub).unwrap();
+                    let canonical_kmer = CanonKmer::from(sub);
 
-                    let bitpacked_kmer = BitpackedKmer::try_from(&canonical_kmer.0[..]).unwrap();
+                    let bitpacked_kmer = BitpackedKmer::from(&canonical_kmer.0[..]);
 
                     *kmer_map.entry(bitpacked_kmer.0).or_insert(0) += 1;
 
@@ -81,9 +81,12 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
     let mut buf = BufWriter::new(std::io::stdout());
     kmer_map
         .into_iter()
-        .map(|pair| UnpackedKmerData::new(pair, k).0)
+        .map(|pair| {
+            let byte_string = UnpackedKmer::from((pair.0, k));
+            (byte_string, pair.1)
+        })
         .for_each(|(kmer, count)| {
-            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer).unwrap())
+            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(&kmer.0).unwrap())
                 .expect("unable to write output");
         });
     buf.flush()?;
@@ -94,14 +97,12 @@ pub fn canonicalize_kmers(filepath: String, k: usize) -> Result<(), Box<dyn Erro
 /// Ascertains the [canonical k-mer](https://bioinfologics.github.io/post/2018/09/17/k-mer-counting-part-i-introduction/) of a DNA string slice.
 pub struct CanonKmer(Vec<u8>);
 
-impl TryFrom<&[u8]> for CanonKmer {
-    type Error = &'static str;
-
-    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
-        let revcompkmer = RevCompKmer::try_from(sub).unwrap();
+impl From<&[u8]> for CanonKmer {
+    fn from(sub: &[u8]) -> Self {
+        let revcompkmer = RevCompKmer::from(sub);
         match revcompkmer.0 < sub.to_vec() {
-            true => Ok(CanonKmer(revcompkmer.0)),
-            false => Ok(CanonKmer(sub.to_vec())),
+            true => CanonKmer(revcompkmer.0),
+            false => CanonKmer(sub.to_vec()),
         }
     }
 }
@@ -109,36 +110,29 @@ impl TryFrom<&[u8]> for CanonKmer {
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
-impl TryFrom<&[u8]> for RevCompKmer {
-    type Error = &'static str;
-
-    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
-        match sub
-            .iter()
-            .rev()
-            .map(|c| match *c {
-                67_u8 => 71_u8,
-                71_u8 => 67_u8,
-                84_u8 => 65_u8,
-                65_u8 => 84_u8,
-                _ => b'Z',
-            })
-            .collect::<Vec<u8>>()
-        {
-            revcompkmer if !revcompkmer.contains(&b'Z') => Ok(RevCompKmer(revcompkmer)),
-            _ => Err("Something is wrong converting to `RevCompKmer`"),
-        }
+impl From<&[u8]> for RevCompKmer {
+    fn from(sub: &[u8]) -> Self {
+        RevCompKmer(
+            sub.iter()
+                .rev()
+                .map(|c| match *c {
+                    67_u8 => 71_u8,
+                    71_u8 => 67_u8,
+                    84_u8 => 65_u8,
+                    65_u8 => 84_u8,
+                    _ => b'Z',
+                })
+                .collect::<Vec<u8>>(),
+        )
     }
 }
 
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
-impl TryFrom<&[u8]> for BitpackedKmer {
-    type Error = &'static str;
-
-    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
-        Ok(BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
+impl From<&[u8]> for BitpackedKmer {
+    fn from(sub: &[u8]) -> Self {
+        BitpackedKmer(sub.iter().fold(0, |mut k, byte| {
             k <<= 2;
             let mask = match byte {
                 b'A' => 0,
@@ -148,31 +142,41 @@ impl TryFrom<&[u8]> for BitpackedKmer {
                 _ => panic!("Won't happen!"),
             };
             k | mask
-        })))
+        }))
     }
 }
 
 /// Unpacking compressed, bitpacked k-mer data.
-pub struct UnpackedKmerData((Vec<u8>, i32));
+pub struct UnpackedKmer(Vec<u8>);
 
-impl UnpackedKmerData {
-    fn new(pair: (u64, i32), k: usize) -> UnpackedKmerData {
+impl From<(u64, usize)> for UnpackedKmer {
+    fn from(kmer_data: (u64, usize)) -> Self {
         let mut byte_string = Vec::new();
+        let (kmer, k) = (kmer_data.0, kmer_data.1);
         for i in 0..k {
-            let c = {
-                let isolate = pair.0 << ((i * 2) + 64 - (k * 2));
-                let base = isolate >> 62;
-                match base {
-                    0 => b'A',
-                    1 => b'C',
-                    2 => b'G',
-                    3 => b'T',
-                    _ => panic!("Won't ever happen!"),
-                }
-            };
-            byte_string.push(c);
+            let isolate = kmer << ((i * 2) + 64 - (k * 2));
+            let base = isolate >> 62;
+            let byte = UnpackedKmerByte::try_from(base).unwrap();
+            byte_string.push(byte.0);
         }
-        UnpackedKmerData((byte_string, pair.1))
+        UnpackedKmer(byte_string)
+    }
+}
+
+/// Unpacking compressed, bitpacked k-mer data.
+pub struct UnpackedKmerByte(u8);
+
+impl TryFrom<u64> for UnpackedKmerByte {
+    type Error = &'static str;
+
+    fn try_from(base: u64) -> Result<Self, Self::Error> {
+        match base {
+            0 => Ok(UnpackedKmerByte(b'A')),
+            1 => Ok(UnpackedKmerByte(b'C')),
+            2 => Ok(UnpackedKmerByte(b'G')),
+            3 => Ok(UnpackedKmerByte(b'T')),
+            _ => Err("Won't ever happen!"),
+        }
     }
 }
 
