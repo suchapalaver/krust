@@ -96,7 +96,7 @@ pub struct CanonKmer(Vec<u8>);
 
 impl CanonKmer {
     fn new(sub: &[u8]) -> CanonKmer {
-        let revcompkmer = RevCompKmer::new(sub);
+        let revcompkmer = RevCompKmer::try_from(sub).unwrap();
         match revcompkmer.0 < sub.to_vec() {
             true => CanonKmer(revcompkmer.0),
             false => CanonKmer(sub.to_vec()),
@@ -107,19 +107,25 @@ impl CanonKmer {
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
-impl RevCompKmer {
-    fn new(sub: &[u8]) -> RevCompKmer {
-        RevCompKmer(
-            sub.iter()
-                .rev()
-                .map(|c| match *c {
-                    67_u8 => 71_u8,
-                    71_u8 => 67_u8,
-                    84_u8 => 65_u8,
-                    _ => 84_u8, //65_u8
-                })
-                .collect(),
-        )
+impl TryFrom<&[u8]> for RevCompKmer {
+    type Error = &'static str;
+
+    fn try_from(sub: &[u8]) -> Result<Self, Self::Error> {
+        match sub
+            .iter()
+            .rev()
+            .map(|c| match *c {
+                67_u8 => 71_u8,
+                71_u8 => 67_u8,
+                84_u8 => 65_u8,
+                65_u8 => 84_u8,
+                _ => b'Z',
+            })
+            .collect::<Vec<u8>>()
+        {
+            revcompkmer if !revcompkmer.contains(&b'Z') => Ok(RevCompKmer(revcompkmer)),
+            _ => Err("Something is wrong converting to `RevCompKmer`"),
+        }
     }
 }
 
