@@ -62,15 +62,21 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 
             let mut i = 0;
             while i <= seq.len() - k {
-                // Make more efficient by skipping to position of 'N'
+                //let kmer = Kmer::from(&seq[i..i + k]);
                 let sub = &seq[i..i + k];
-                if !sub.contains(&b'N') {
-		    let revcompkmer = RevCompKmer::from(sub);
-		    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, sub));
-                    let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
-                    *kmer_map.entry(kmer).or_insert(0) += 1;
+                let bytestring = Kmer::try_from(sub);
+                match bytestring.is_ok() {
+                    true => {
+                        let Kmer(bytestring) = bytestring.unwrap();
+                        let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
+                        let CanonicalKmer(canonical_kmer) =
+                            CanonicalKmer::from((revcompkmer, bytestring));
+                        let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
+                        *kmer_map.entry(kmer).or_insert(0) += 1;
+                        i += 1;
+                    }
+                    false => i += 1,
                 }
-                i += 1;
             }
         });
 
@@ -79,12 +85,29 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
         .for_each(|(UnpackedKmer(kmer), count)| {
-            writeln!(buf, ">{}\n{}", count, std::str::from_utf8(kmer.as_slice()).unwrap())
-                .expect("Unable to write output.");
+            writeln!(
+                buf,
+                ">{}\n{}",
+                count,
+                std::str::from_utf8(kmer.as_slice()).unwrap()
+            )
+            .expect("Unable to write output.");
         });
     buf.flush()?;
 
     Ok(())
+}
+
+pub struct Kmer(Vec<u8>);
+
+impl TryFrom<&[u8]> for Kmer {
+    type Error = ();
+    fn try_from(sub: &[u8]) -> Result<Kmer, ()> {
+        match !sub.contains(&(b'A' | b'C' | b'G' | b'T')) {
+            true => Ok(Kmer(sub.to_vec())),
+            false => Err(()),
+        }
+    }
 }
 
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
@@ -113,8 +136,8 @@ impl From<Vec<u8>> for BitpackedKmer {
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
-impl From<&[u8]> for RevCompKmer {
-    fn from(sub: &[u8]) -> Self {
+impl From<&Vec<u8>> for RevCompKmer {
+    fn from(sub: &Vec<u8>) -> Self {
         RevCompKmer(
             sub.iter()
                 .rev()
@@ -137,13 +160,13 @@ impl RevCompKmer {
 
 pub struct CanonicalKmer(Vec<u8>);
 
-impl From<(RevCompKmer, &[u8])> for CanonicalKmer {
-    fn from(comp: (RevCompKmer, &[u8])) -> Self {
-	let canonical_kmer = match comp.0.0 < comp.1.to_vec() {
-	    true => comp.0.0,
-	    false => comp.1.to_vec(),
-	};
-	CanonicalKmer(canonical_kmer)
+impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
+    fn from(comp: (Vec<u8>, Vec<u8>)) -> Self {
+        let canonical_kmer = match comp.0 < comp.1.to_vec() {
+            true => comp.0,
+            false => comp.1.to_vec(),
+        };
+        CanonicalKmer(canonical_kmer)
     }
 }
 
