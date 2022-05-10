@@ -106,6 +106,7 @@ fn print_kmer_map(kmer_map: DashFx, k: usize) -> Result<(), Box<dyn Error>> {
 }
 
 /// Creating a valid k-mer bytestring.
+#[derive(Debug, PartialEq)]
 pub struct Kmer(Vec<u8>);
 
 impl Kmer {
@@ -301,5 +302,29 @@ mod tests {
     fn find_invalid_panics_when_passed_valid_kmer() {
         let dna = "CACTG".as_bytes();
         let _ans = find_invalid(dna);
+    }
+
+    #[test]
+    fn kmer_new_returns_valid_kmer() {
+	let dna = "CATAG".as_bytes();
+	let result = {
+	    match Kmer::new(dna) {
+		Some(Kmer(valid_bytestring)) => valid_bytestring,
+		None => vec![b'N'; 5],
+	    }
+	};
+	assert_eq!("CATAG".as_bytes().to_vec(), result);
+    }
+
+    #[test]
+    fn kmer_new_returns_none_for_invalid_kmer() {
+	let dna = "CANAG".as_bytes();
+	let result = {
+	    match Kmer::new(dna) {
+		Some(Kmer(valid_bytestring)) => Some(Kmer(valid_bytestring)),
+		None => None,
+	    }
+	};
+	assert_eq!(None, result);
     }
 }
