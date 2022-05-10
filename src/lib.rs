@@ -57,25 +57,12 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .par_bridge()
         .for_each(|r| {
-            let record = r.expect("error reading fasta record");
+            let record = r.expect("Error reading fasta record.");
             let seq: &[u8] = record.seq();
             process(seq, &k, &kmer_map).unwrap();
         });
 
-    let mut buf = BufWriter::new(std::io::stdout());
-    kmer_map
-        .into_iter()
-        .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
-        .for_each(|(UnpackedKmer(kmer), count)| {
-            writeln!(
-                buf,
-                ">{}\n{}",
-                count,
-                std::str::from_utf8(kmer.as_slice()).unwrap()
-            )
-            .expect("Unable to write output.");
-        });
-    buf.flush()?;
+    print_kmer_map(kmer_map, k)?;
 
     Ok(())
 }
@@ -100,7 +87,25 @@ fn process(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-#[derive(Debug)]
+fn print_kmer_map(kmer_map: DashFx, k: usize) -> Result<(), Box<dyn Error>> {
+    let mut buf = BufWriter::new(std::io::stdout());
+    kmer_map
+        .into_iter()
+        .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
+        .for_each(|(UnpackedKmer(kmer), count)| {
+            writeln!(
+                buf,
+                ">{}\n{}",
+                count,
+                std::str::from_utf8(kmer.as_slice()).unwrap()
+            )
+            .expect("Unable to write output.");
+        });
+    buf.flush()?;
+    Ok(())
+}
+
+/// Confirms bytestring as a valid k-mer. 
 pub struct Kmer(Vec<u8>);
 
 impl TryFrom<&[u8]> for Kmer {
@@ -113,7 +118,7 @@ impl TryFrom<&[u8]> for Kmer {
     }
 }
 
-/// Find the index of
+/// Find the index of the rightmost invalid byte in an invalid bytestring.
 fn find_invalid(sub: &[u8]) -> usize {
     match sub
         .iter()
@@ -124,7 +129,7 @@ fn find_invalid(sub: &[u8]) -> usize {
     }
 }
 
-/// Packing k-mers into 64 bit unsigned integers
+/// Packing k-mers into 64 bit unsigned integers.
 fn bitpack_kmer(Kmer(bytestring): Kmer) -> BitpackedKmer {
     let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
     let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, bytestring));
@@ -180,7 +185,7 @@ impl RevCompKmer {
 }
 
 /// Find the canonical kmer
-/// --the alphabetically smaller of the substring and its reverse complement
+/// --the alphabetically smaller of the substring and its reverse complement.
 pub struct CanonicalKmer(Vec<u8>);
 
 impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
