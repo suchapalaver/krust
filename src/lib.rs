@@ -60,33 +60,6 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             let record = r.expect("error reading fasta record");
             let seq: &[u8] = record.seq();
             process(seq, &k, &kmer_map).unwrap();
-            /*
-                        let mut i = 0;
-                        while i <= seq.len() - k {
-                            let sub = &seq[i..i + k];
-                    let bytestring = Kmer::try_from(sub);
-                    match bytestring.is_ok() {
-                                true => {
-                                    let Kmer(bytestring) = bytestring.unwrap();
-                                    let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
-                                    let CanonicalKmer(canonical_kmer) =
-                                        CanonicalKmer::from((revcompkmer, bytestring));
-                                    let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
-                                    *kmer_map.entry(kmer).or_insert(0) += 1;
-                                    i += 1;
-                                }
-                                false => {
-                        let mut position: usize = 0;
-                        sub.iter().enumerate().for_each(|(pos, byte)| {
-                            if byte != &(b'A' | b'C' | b'G' | b'T') {
-                            position = pos;
-                            }
-                        });
-                        i += position + 1;
-                        },
-                    }
-                    }
-            */
         });
 
     let mut buf = BufWriter::new(std::io::stdout());
@@ -140,14 +113,15 @@ impl TryFrom<&[u8]> for Kmer {
     }
 }
 
+/// Find the index of
 fn find_invalid(sub: &[u8]) -> usize {
-    let mut invalid_byte: usize = 0;
-    sub.iter().enumerate().for_each(|(j, byte)| {
-        if byte != &(b'A' | b'C' | b'G' | b'T') {
-            invalid_byte = j;
-        }
-    });
-    invalid_byte
+    match sub
+        .iter()
+        .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
+    {
+        Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
+        None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
+    }
 }
 
 /// Packing k-mers into 64 bit unsigned integers
@@ -273,5 +247,52 @@ impl Config {
         };
 
         Ok(Config { kmer_len, filepath })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_invalid_works1() {
+        let dna = "NACNN".as_bytes();
+        let ans = find_invalid(dna);
+        assert_eq!(4, ans);
+    }
+
+    #[test]
+    fn find_invalid_works2() {
+        let dna = "NACNG".as_bytes();
+        let ans = find_invalid(dna);
+        assert_eq!(3, ans);
+    }
+
+    #[test]
+    fn find_invalid_works3() {
+        let dna = "NANTG".as_bytes();
+        let ans = find_invalid(dna);
+        assert_eq!(2, ans);
+    }
+
+    #[test]
+    fn find_invalid_works4() {
+        let dna = "NNCTG".as_bytes();
+        let ans = find_invalid(dna);
+        assert_eq!(1, ans);
+    }
+
+    #[test]
+    fn find_invalid_works5() {
+        let dna = "NACTG".as_bytes();
+        let ans = find_invalid(dna);
+        assert_eq!(0, ans);
+    }
+
+    #[test]
+    #[should_panic(expected = "Valid bytestring passed to `find_invalid`, which is a bug.")]
+    fn find_invalid_panics_when_passed_valid_kmer() {
+        let dna = "CACTG".as_bytes();
+        let _ans = find_invalid(dna);
     }
 }
