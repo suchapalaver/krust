@@ -321,7 +321,7 @@ mod tests {
 	let dna = "CANAG".as_bytes();
 	let result = {
 	    match Kmer::new(dna) {
-		Some(Kmer(valid_bytestring)) => Some(Kmer(valid_bytestring)),
+		Some(x) => Some(x),
 		None => None,
 	    }
 	};
