@@ -59,32 +59,34 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .for_each(|r| {
             let record = r.expect("error reading fasta record");
             let seq: &[u8] = record.seq();
-
-            let mut i = 0;
-            while i <= seq.len() - k {
-                let sub = &seq[i..i + k];
-		let bytestring = Kmer::try_from(sub);
-		match bytestring.is_ok() {
-                    true => {
-                        let Kmer(bytestring) = bytestring.unwrap();
-                        let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
-                        let CanonicalKmer(canonical_kmer) =
-                            CanonicalKmer::from((revcompkmer, bytestring));
-                        let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
-                        *kmer_map.entry(kmer).or_insert(0) += 1;
-                        i += 1;
+            process(seq, &k, &kmer_map).unwrap();
+            /*
+                        let mut i = 0;
+                        while i <= seq.len() - k {
+                            let sub = &seq[i..i + k];
+                    let bytestring = Kmer::try_from(sub);
+                    match bytestring.is_ok() {
+                                true => {
+                                    let Kmer(bytestring) = bytestring.unwrap();
+                                    let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
+                                    let CanonicalKmer(canonical_kmer) =
+                                        CanonicalKmer::from((revcompkmer, bytestring));
+                                    let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
+                                    *kmer_map.entry(kmer).or_insert(0) += 1;
+                                    i += 1;
+                                }
+                                false => {
+                        let mut position: usize = 0;
+                        sub.iter().enumerate().for_each(|(pos, byte)| {
+                            if byte != &(b'A' | b'C' | b'G' | b'T') {
+                            position = pos;
+                            }
+                        });
+                        i += position + 1;
+                        },
                     }
-                    false => {
-			let mut position: usize = 0;
-			sub.iter().enumerate().for_each(|(pos, byte)| {
-			    if byte != &(b'A' | b'C' | b'G' | b'T') {
-				position = pos;
-			    }
-			});
-			i += position + 1;
-		    },
-		}
-	    }
+                    }
+            */
         });
 
     let mut buf = BufWriter::new(std::io::stdout());
@@ -104,6 +106,27 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+fn process(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
+    let mut i = 0;
+    while i <= seq.len() - k {
+        let sub = &seq[i..i + k];
+        let bytestring = Kmer::try_from(sub);
+        match bytestring {
+            Ok(valid_bytestring) => {
+                let BitpackedKmer(kmer) = bitpack_kmer(valid_bytestring);
+                *kmer_map.entry(kmer).or_insert(0) += 1;
+                i += 1;
+            }
+            Err(()) => {
+                let invalid_byte = find_invalid(sub);
+                i += invalid_byte + 1;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct Kmer(Vec<u8>);
 
@@ -115,6 +138,23 @@ impl TryFrom<&[u8]> for Kmer {
             false => Err(()),
         }
     }
+}
+
+fn find_invalid(sub: &[u8]) -> usize {
+    let mut invalid_byte: usize = 0;
+    sub.iter().enumerate().for_each(|(j, byte)| {
+        if byte != &(b'A' | b'C' | b'G' | b'T') {
+            invalid_byte = j;
+        }
+    });
+    invalid_byte
+}
+
+/// Packing k-mers into 64 bit unsigned integers
+fn bitpack_kmer(Kmer(bytestring): Kmer) -> BitpackedKmer {
+    let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
+    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, bytestring));
+    BitpackedKmer::from(canonical_kmer)
 }
 
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
@@ -165,6 +205,8 @@ impl RevCompKmer {
     }
 }
 
+/// Find the canonical kmer
+/// --the alphabetically smaller of the substring and its reverse complement
 pub struct CanonicalKmer(Vec<u8>);
 
 impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
