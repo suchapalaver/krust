@@ -62,7 +62,7 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             process(seq, &k, &kmer_map).unwrap();
         });
 
-    print_kmer_map(kmer_map, k)?;
+    let _ = print_kmer_map(kmer_map, k)?;
 
     Ok(())
 }
@@ -71,14 +71,14 @@ fn process(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error
     let mut i = 0;
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
-        let bytestring = Kmer::try_from(sub);
+        let bytestring = Kmer::new(sub);
         match bytestring {
-            Ok(valid_bytestring) => {
+            Some(Kmer(valid_bytestring)) => {
                 let BitpackedKmer(kmer) = bitpack_kmer(valid_bytestring);
                 *kmer_map.entry(kmer).or_insert(0) += 1;
                 i += 1;
             }
-            Err(()) => {
+            None => {
                 let invalid_byte = find_invalid(sub);
                 i += invalid_byte + 1;
             }
@@ -105,16 +105,18 @@ fn print_kmer_map(kmer_map: DashFx, k: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Confirms bytestring as a valid k-mer. 
+/// Creating a valid k-mer bytestring.
 pub struct Kmer(Vec<u8>);
 
-impl TryFrom<&[u8]> for Kmer {
-    type Error = ();
-    fn try_from(sub: &[u8]) -> Result<Kmer, ()> {
-        match !sub.contains(&b'N') {
-            true => Ok(Kmer(sub.to_vec())),
-            false => Err(()),
-        }
+impl Kmer {
+    fn new(sub: &[u8]) -> Option<Kmer> {
+	match !sub.contains(&b'N') {
+	    true => {
+		let valid_kmer = sub.to_vec();
+		Some(Kmer(valid_kmer))
+	    },
+	    false => None,
+	}
     }
 }
 
@@ -130,7 +132,7 @@ fn find_invalid(sub: &[u8]) -> usize {
 }
 
 /// Packing k-mers into 64 bit unsigned integers.
-fn bitpack_kmer(Kmer(bytestring): Kmer) -> BitpackedKmer {
+fn bitpack_kmer(bytestring: Vec<u8>) -> BitpackedKmer {
     let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
     let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, bytestring));
     BitpackedKmer::from(canonical_kmer)
