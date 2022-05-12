@@ -132,9 +132,13 @@ fn find_invalid(sub: &[u8]) -> usize {
     }
 }
 
+fn revcomp_kmer(bytestring: &Vec<u8>) -> RevCompKmer {
+    RevCompKmer::from(bytestring)
+}
+
 /// Packing k-mers into 64 bit unsigned integers.
 fn bitpack_kmer(bytestring: Vec<u8>) -> BitpackedKmer {
-    let RevCompKmer(revcompkmer) = RevCompKmer::from(&bytestring);
+    let RevCompKmer(revcompkmer) = revcomp_kmer(&bytestring);
     let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, bytestring));
     BitpackedKmer::from(canonical_kmer)
 }
