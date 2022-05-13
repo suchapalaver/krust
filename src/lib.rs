@@ -78,8 +78,7 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
                 if kmer_map.contains_key(&bitpacked_kmer) {
                     *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
                 } else {
-                    let RevCompKmer(revcompkmer) = RevCompKmer::new(&valid_bytestring)
-                        .expect("`RevCompKmer` returning `None` is unexpected behavior");
+                    let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
                     let CanonicalKmer(canonical_kmer) =
                         CanonicalKmer::from((revcompkmer, valid_bytestring));
                     let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
@@ -168,18 +167,18 @@ impl From<&Vec<u8>> for BitpackedKmer {
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
-impl RevCompKmer {
-    fn new(sub: &[u8]) -> Option<Self> {
+impl From<&Vec<u8>> for RevCompKmer {
+    fn from(sub: &Vec<u8>) -> Self {
         let mut revcomp = Vec::with_capacity(sub.len());
         for byte in sub.iter().rev() {
-            match RevCompKmer::complement(*byte) {
-                Some(comp) => revcomp.push(comp),
-                None => return None,
-            }
+            let comp = RevCompKmer::complement(*byte);
+            revcomp.push(comp);
         }
-        Some(RevCompKmer(revcomp))
+        RevCompKmer(revcomp)
     }
+}
 
+impl RevCompKmer {
     fn complement(byte: u8) -> u8 {
         let complement = match byte {
             67_u8 => 71_u8,
