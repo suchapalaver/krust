@@ -74,13 +74,13 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-		let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+		let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::new(&valid_bytestring).expect("`BitpackerKmer` returning `None` is unexpected behavior");
 		if kmer_map.contains_key(&bitpacked_kmer) {
 		    *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
 		} else {
 		    let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
 		    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
-                    let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
+                    let BitpackedKmer(kmer) = BitpackedKmer::new(&canonical_kmer).expect("`BitpackerKmer` returning `None` is unexpected behavior");
                     *kmer_map.entry(kmer).or_insert(0) += 1;
 		}
                 i += 1;
@@ -142,9 +142,9 @@ impl Kmer {
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
-impl From<&Vec<u8>> for BitpackedKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        let bitpacked_kmer: u64 = {
+impl BitpackedKmer {
+    fn new(sub: &[u8]) -> Option<Self> {
+	let bitpacked_kmer: u64 = {
             let mut k: u64 = 0;
             for byte in sub.iter() {
                 k <<= 2;
@@ -152,13 +152,14 @@ impl From<&Vec<u8>> for BitpackedKmer {
                     b'A' => 0,
                     b'C' => 1,
                     b'G' => 2,
-                    _ => 3, // b'T'
+		    b'T' => 3,
+                    _ => return None,
                 };
                 k |= mask;
             }
             k
         };
-        BitpackedKmer(bitpacked_kmer)
+        Some(BitpackedKmer(bitpacked_kmer))
     }
 }
 
