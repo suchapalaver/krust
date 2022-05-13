@@ -213,8 +213,8 @@ pub struct UnpackedKmer(Vec<u8>);
 
 impl From<(u64, usize)> for UnpackedKmer {
     fn from(kmer_data: (u64, usize)) -> Self {
-        let mut byte_string = Vec::new();
         let (kmer, k) = (kmer_data.0, kmer_data.1);
+	let mut byte_string = Vec::with_capacity(k);
         for i in 0..k {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
