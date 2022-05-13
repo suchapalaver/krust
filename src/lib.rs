@@ -78,16 +78,7 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-                let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
-                if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
-                    *freq += 1;
-                } else {
-                    let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
-                    let CanonicalKmer(canonical_kmer) =
-                        CanonicalKmer::from((revcompkmer, valid_bytestring));
-                    let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
-                    *kmer_map.entry(kmer).or_insert(0) += 1;
-                }
+		process_valid_bytes(&kmer_map, valid_bytestring);
                 i += 1;
             }
             None => {
@@ -97,6 +88,19 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         }
     }
     Ok(())
+}
+
+fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
+    let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+    if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
+        *freq += 1;
+    } else {
+        let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
+        let CanonicalKmer(canonical_kmer) =
+            CanonicalKmer::from((revcompkmer, valid_bytestring));
+        let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
+        *kmer_map.entry(kmer).or_insert(0) += 1;
+    }
 }
 
 fn unpack_kmers(kmer_map: DashFx, k: usize) -> HashMap<UnpackedKmer, i32> {
