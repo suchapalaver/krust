@@ -61,7 +61,8 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             let seq: &[u8] = record.seq();
             process_seq(seq, &k, &kmer_map).unwrap();
         });
-
+    for (UnpackedKmer(kmer), count) in unpack_kmers(kmer_map, k) {
+    }
     let _ = print_kmer_map(kmer_map, k)?;
 
     Ok(())
@@ -93,6 +94,13 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         }
     }
     Ok(())
+}
+
+fn unpack_kmers(kmer_map: DashFx, k: usize) -> std::collections::HashMap<UnpackedKmer, i32> {
+    kmer_map
+        .into_iter()
+        .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
+        .collect()
 }
 
 fn print_kmer_map(kmer_map: DashFx, k: usize) -> Result<(), Box<dyn Error>> {
@@ -206,6 +214,7 @@ impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
 }
 
 /// Unpacking compressed, bitpacked k-mer data.
+#[derive(Hash, PartialEq, Eq)]
 pub struct UnpackedKmer(Vec<u8>);
 
 impl From<(u64, usize)> for UnpackedKmer {
