@@ -211,7 +211,7 @@ pub struct UnpackedKmer(Vec<u8>);
 impl From<(u64, usize)> for UnpackedKmer {
     fn from(kmer_data: (u64, usize)) -> Self {
         let (kmer, k) = (kmer_data.0, kmer_data.1);
-	let mut byte_string = Vec::with_capacity(k);
+        let mut byte_string = Vec::with_capacity(k);
         for i in 0..k {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
@@ -232,7 +232,7 @@ impl From<u64> for UnpackedKmerByte {
             1 => UnpackedKmerByte(b'C'),
             2 => UnpackedKmerByte(b'G'),
             3 => UnpackedKmerByte(b'T'),
-	    _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
+            _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
         }
     }
 }
