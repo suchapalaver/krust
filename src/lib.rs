@@ -74,13 +74,15 @@ fn process(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-                let BitpackedKmer(kmer) = bitpack_kmer(valid_bytestring);
+		let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
+		let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
+                let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
                 *kmer_map.entry(kmer).or_insert(0) += 1;
                 i += 1;
             }
             None => {
-                let invalid_byte = find_invalid(sub);
-                i += invalid_byte + 1;
+                let invalid_byte_index = Kmer::find_invalid(sub);
+                i += invalid_byte_index + 1;
             }
         }
     }
@@ -119,28 +121,17 @@ impl Kmer {
 	    false => None,
 	}
     }
-}
 
-/// Find the index of the rightmost invalid byte in an invalid bytestring.
-fn find_invalid(sub: &[u8]) -> usize {
-    match sub
-        .iter()
-        .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
-    {
-        Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
-        None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
+    /// Find the index of the rightmost invalid byte in an invalid bytestring.
+    fn find_invalid(sub: &[u8]) -> usize {
+	match sub
+            .iter()
+            .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
+	{
+            Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
+            None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
+	}
     }
-}
-
-fn revcomp_kmer(bytestring: &Vec<u8>) -> RevCompKmer {
-    RevCompKmer::from(bytestring)
-}
-
-/// Packing k-mers into 64 bit unsigned integers.
-fn bitpack_kmer(bytestring: Vec<u8>) -> BitpackedKmer {
-    let RevCompKmer(revcompkmer) = revcomp_kmer(&bytestring);
-    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, bytestring));
-    BitpackedKmer::from(canonical_kmer)
 }
 
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
@@ -269,43 +260,48 @@ mod tests {
     #[test]
     fn find_invalid_works1() {
         let dna = "NACNN".as_bytes();
-        let ans = find_invalid(dna);
+        let ans = Kmer::find_invalid(dna);
         assert_eq!(4, ans);
+	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
     fn find_invalid_works2() {
         let dna = "NACNG".as_bytes();
-        let ans = find_invalid(dna);
+        let ans = Kmer::find_invalid(dna);
         assert_eq!(3, ans);
+	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
     fn find_invalid_works3() {
         let dna = "NANTG".as_bytes();
-        let ans = find_invalid(dna);
+        let ans = Kmer::find_invalid(dna);
         assert_eq!(2, ans);
+	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
     fn find_invalid_works4() {
         let dna = "NNCTG".as_bytes();
-        let ans = find_invalid(dna);
+        let ans = Kmer::find_invalid(dna);
         assert_eq!(1, ans);
+	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
     fn find_invalid_works5() {
         let dna = "NACTG".as_bytes();
-        let ans = find_invalid(dna);
+        let ans = Kmer::find_invalid(dna);
         assert_eq!(0, ans);
+	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
     #[should_panic(expected = "Valid bytestring passed to `find_invalid`, which is a bug.")]
     fn find_invalid_panics_when_passed_valid_kmer() {
         let dna = "CACTG".as_bytes();
-        let _ans = find_invalid(dna);
+        let _ans = Kmer::find_invalid(dna);
     }
 
     #[test]
