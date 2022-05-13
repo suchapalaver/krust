@@ -59,7 +59,7 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .for_each(|r| {
             let record = r.expect("Error reading fasta record.");
             let seq: &[u8] = record.seq();
-            process(seq, &k, &kmer_map).unwrap();
+            process_seq(seq, &k, &kmer_map).unwrap();
         });
 
     let _ = print_kmer_map(kmer_map, k)?;
@@ -67,17 +67,22 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
+fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
     let mut i = 0;
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-		let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
-		let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
-                let BitpackedKmer(kmer) = BitpackedKmer::from(canonical_kmer);
-                *kmer_map.entry(kmer).or_insert(0) += 1;
+		let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+		if kmer_map.contains_key(&bitpacked_kmer) {
+		    *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
+		} else {
+		    let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
+		    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
+                    let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
+                    *kmer_map.entry(kmer).or_insert(0) += 1;
+		}
                 i += 1;
             }
             None => {
@@ -137,8 +142,8 @@ impl Kmer {
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
-impl From<Vec<u8>> for BitpackedKmer {
-    fn from(sub: Vec<u8>) -> Self {
+impl From<&Vec<u8>> for BitpackedKmer {
+    fn from(sub: &Vec<u8>) -> Self {
         let bitpacked_kmer: u64 = {
             let mut k: u64 = 0;
             for byte in sub.iter() {
