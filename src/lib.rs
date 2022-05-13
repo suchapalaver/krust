@@ -28,10 +28,11 @@ use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
 use std::{
+    collections::HashMap,
     env,
     error::Error,
     hash::BuildHasherDefault,
-    io::{BufWriter, Write},
+    io::{BufWriter, Write, Stdout},
 };
 
 /// A custom `DashMap` w/ `FxHasher`.  
@@ -61,9 +62,11 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             let seq: &[u8] = record.seq();
             process_seq(seq, &k, &kmer_map).unwrap();
         });
+    let mut buf = BufWriter::new(std::io::stdout());
     for (UnpackedKmer(kmer), count) in unpack_kmers(kmer_map, k) {
+	print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
     }
-    let _ = print_kmer_map(kmer_map, k)?;
+    buf.flush()?;
 
     Ok(())
 }
@@ -96,29 +99,21 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
     Ok(())
 }
 
-fn unpack_kmers(kmer_map: DashFx, k: usize) -> std::collections::HashMap<UnpackedKmer, i32> {
+fn unpack_kmers(kmer_map: DashFx, k: usize) -> HashMap<UnpackedKmer, i32> {
     kmer_map
         .into_iter()
         .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
         .collect()
 }
 
-fn print_kmer_map(kmer_map: DashFx, k: usize) -> Result<(), Box<dyn Error>> {
-    let mut buf = BufWriter::new(std::io::stdout());
-    kmer_map
-        .into_iter()
-        .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
-        .for_each(|(UnpackedKmer(kmer), count)| {
-            writeln!(
-                buf,
-                ">{}\n{}",
-                count,
-                std::str::from_utf8(kmer.as_slice()).unwrap()
-            )
-            .expect("Unable to write output.");
-        });
-    buf.flush()?;
-    Ok(())
+fn print_kmer_map(buf: &mut BufWriter<Stdout>, UnpackedKmer(kmer): UnpackedKmer, count: i32) {
+    writeln!(
+        buf,
+        ">{}\n{}",
+        count,
+        std::str::from_utf8(kmer.as_slice()).unwrap()
+    )
+        .expect("Unable to write output.");
 }
 
 /// Creating a valid k-mer bytestring.
