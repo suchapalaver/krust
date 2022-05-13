@@ -234,7 +234,8 @@ impl From<u64> for UnpackedKmerByte {
             0 => UnpackedKmerByte(b'A'),
             1 => UnpackedKmerByte(b'C'),
             2 => UnpackedKmerByte(b'G'),
-            _ => UnpackedKmerByte(b'T'), // 3
+            3 => UnpackedKmerByte(b'T'),
+	    _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
         }
     }
 }
