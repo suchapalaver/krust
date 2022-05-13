@@ -32,7 +32,7 @@ use std::{
     env,
     error::Error,
     hash::BuildHasherDefault,
-    io::{BufWriter, Write, Stdout},
+    io::{BufWriter, Stdout, Write},
 };
 
 /// A custom `DashMap` w/ `FxHasher`.  
@@ -64,7 +64,7 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         });
     let mut buf = BufWriter::new(std::io::stdout());
     for (UnpackedKmer(kmer), count) in unpack_kmers(kmer_map, k) {
-	print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
+        print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
     }
     buf.flush()?;
 
@@ -79,8 +79,8 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
                 let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
-		if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
-		    *freq += 1;
+                if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
+                    *freq += 1;
                 } else {
                     let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
                     let CanonicalKmer(canonical_kmer) =
@@ -113,7 +113,7 @@ fn print_kmer_map(buf: &mut BufWriter<Stdout>, UnpackedKmer(kmer): UnpackedKmer,
         count,
         std::str::from_utf8(kmer.as_slice()).unwrap()
     )
-        .expect("Unable to write output.");
+    .expect("Unable to write output.");
 }
 
 /// Creating a valid k-mer bytestring.
