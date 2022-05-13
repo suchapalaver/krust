@@ -79,8 +79,8 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
                 let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
-                if kmer_map.contains_key(&bitpacked_kmer) {
-                    *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
+		if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
+		    *freq += 1;
                 } else {
                     let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
                     let CanonicalKmer(canonical_kmer) =
