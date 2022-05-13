@@ -74,15 +74,19 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-		let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::new(&valid_bytestring).expect("`BitpackerKmer` returning `None` is unexpected behavior");
-		if kmer_map.contains_key(&bitpacked_kmer) {
-		    *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
-		} else {
-		    let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
-		    let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
-                    let BitpackedKmer(kmer) = BitpackedKmer::new(&canonical_kmer).expect("`BitpackerKmer` returning `None` is unexpected behavior");
+                let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::new(&valid_bytestring)
+                    .expect("`BitpackerKmer` returning `None` is unexpected behavior");
+                if kmer_map.contains_key(&bitpacked_kmer) {
+                    *kmer_map.get_mut(&bitpacked_kmer).unwrap() += 1;
+                } else {
+                    let RevCompKmer(revcompkmer) = RevCompKmer::new(&valid_bytestring)
+                        .expect("`RevCompKmer` returning `None` is unexpected behavior");
+                    let CanonicalKmer(canonical_kmer) =
+                        CanonicalKmer::from((revcompkmer, valid_bytestring));
+                    let BitpackedKmer(kmer) = BitpackedKmer::new(&canonical_kmer)
+                        .expect("`BitpackerKmer` returning `None` is unexpected behavior");
                     *kmer_map.entry(kmer).or_insert(0) += 1;
-		}
+                }
                 i += 1;
             }
             None => {
@@ -118,24 +122,24 @@ pub struct Kmer(Vec<u8>);
 
 impl Kmer {
     fn new(sub: &[u8]) -> Option<Kmer> {
-	match !sub.contains(&b'N') {
-	    true => {
-		let valid_kmer = sub.to_vec();
-		Some(Kmer(valid_kmer))
-	    },
-	    false => None,
-	}
+        match !sub.contains(&b'N') {
+            true => {
+                let valid_kmer = sub.to_vec();
+                Some(Kmer(valid_kmer))
+            }
+            false => None,
+        }
     }
 
     /// Find the index of the rightmost invalid byte in an invalid bytestring.
     fn find_invalid(sub: &[u8]) -> usize {
-	match sub
+        match sub
             .iter()
             .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
-	{
+        {
             Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
             None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
-	}
+        }
     }
 }
 
@@ -144,7 +148,7 @@ pub struct BitpackedKmer(u64);
 
 impl BitpackedKmer {
     fn new(sub: &[u8]) -> Option<Self> {
-	let bitpacked_kmer: u64 = {
+        let bitpacked_kmer: u64 = {
             let mut k: u64 = 0;
             for byte in sub.iter() {
                 k <<= 2;
@@ -152,7 +156,7 @@ impl BitpackedKmer {
                     b'A' => 0,
                     b'C' => 1,
                     b'G' => 2,
-		    b'T' => 3,
+                    b'T' => 3,
                     _ => return None,
                 };
                 k |= mask;
@@ -166,25 +170,27 @@ impl BitpackedKmer {
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(Vec<u8>);
 
-impl From<&Vec<u8>> for RevCompKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        RevCompKmer(
-            sub.iter()
-                .rev()
-                .map(|byte| RevCompKmer::complement(*byte))
-                .collect::<Vec<u8>>(),
-        )
-    }
-}
-
 impl RevCompKmer {
-    fn complement(byte: u8) -> u8 {
-        match byte {
+    fn new(sub: &[u8]) -> Option<Self> {
+        let mut revcomp = Vec::with_capacity(sub.len());
+        for byte in sub.iter().rev() {
+            match RevCompKmer::complement(*byte) {
+                Some(comp) => revcomp.push(comp),
+                None => return None,
+            }
+        }
+        Some(RevCompKmer(revcomp))
+    }
+
+    fn complement(byte: u8) -> Option<u8> {
+        let complement = match byte {
             67_u8 => 71_u8,
             71_u8 => 67_u8,
             84_u8 => 65_u8,
-            _ => 84_u8, // 65_u8
-        }
+            65_u8 => 84_u8,
+            _ => return None,
+        };
+        Some(complement)
     }
 }
 
@@ -268,7 +274,7 @@ mod tests {
         let dna = "NACNN".as_bytes();
         let ans = Kmer::find_invalid(dna);
         assert_eq!(4, ans);
-	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
@@ -276,7 +282,7 @@ mod tests {
         let dna = "NACNG".as_bytes();
         let ans = Kmer::find_invalid(dna);
         assert_eq!(3, ans);
-	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
@@ -284,7 +290,7 @@ mod tests {
         let dna = "NANTG".as_bytes();
         let ans = Kmer::find_invalid(dna);
         assert_eq!(2, ans);
-	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
@@ -292,7 +298,7 @@ mod tests {
         let dna = "NNCTG".as_bytes();
         let ans = Kmer::find_invalid(dna);
         assert_eq!(1, ans);
-	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
@@ -300,7 +306,7 @@ mod tests {
         let dna = "NACTG".as_bytes();
         let ans = Kmer::find_invalid(dna);
         assert_eq!(0, ans);
-	assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
     }
 
     #[test]
@@ -312,25 +318,25 @@ mod tests {
 
     #[test]
     fn kmer_new_returns_valid_kmer() {
-	let dna = "CATAG".as_bytes();
-	let result = {
-	    match Kmer::new(dna) {
-		Some(Kmer(valid_bytestring)) => valid_bytestring,
-		None => vec![b'N'; 5],
-	    }
-	};
-	assert_eq!("CATAG".as_bytes().to_vec(), result);
+        let dna = "CATAG".as_bytes();
+        let result = {
+            match Kmer::new(dna) {
+                Some(Kmer(valid_bytestring)) => valid_bytestring,
+                None => vec![b'N'; 5],
+            }
+        };
+        assert_eq!("CATAG".as_bytes().to_vec(), result);
     }
 
     #[test]
     fn kmer_new_returns_none_for_invalid_kmer() {
-	let dna = "CANAG".as_bytes();
-	let result = {
-	    match Kmer::new(dna) {
-		Some(x) => Some(x),
-		None => None,
-	    }
-	};
-	assert_eq!(None, result);
+        let dna = "CANAG".as_bytes();
+        let result = {
+            match Kmer::new(dna) {
+                Some(x) => Some(x),
+                None => None,
+            }
+        };
+        assert_eq!(None, result);
     }
 }
