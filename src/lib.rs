@@ -180,15 +180,15 @@ impl RevCompKmer {
         Some(RevCompKmer(revcomp))
     }
 
-    fn complement(byte: u8) -> Option<u8> {
+    fn complement(byte: u8) -> u8 {
         let complement = match byte {
             67_u8 => 71_u8,
             71_u8 => 67_u8,
             84_u8 => 65_u8,
             65_u8 => 84_u8,
-            _ => return None,
+            _ => panic!("`RevCompKmer::from` should only be passed valid k-mers"),
         };
-        Some(complement)
+        complement
     }
 }
 
