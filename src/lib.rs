@@ -44,6 +44,8 @@ use std::{
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
 pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
+pub type UnpackDashFx = DashMap<Vec<u8>, i32, BuildHasherDefault<FxHasher>>;
+
 ///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
 /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
@@ -51,24 +53,18 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
-    let kmer_map: DashFx = build_kmer_map(filepath, k)?;
-    /*
-    let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
+    let mut buf = BufWriter::new(std::io::stdout());
 
-    let _ = fasta::Reader::from_file(&filepath)?
-        .records()
+    let _print_results = build_kmer_map(filepath, k)?
         .into_iter()
         .par_bridge()
-        .for_each(|r| {
-            let record = r.expect("Error reading fasta record.");
-            let seq: &[u8] = record.seq();
-            process_seq(seq, &k, &kmer_map).unwrap();
+        .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from((bitpacked_kmer, k)).0, freq))
+        .collect::<HashMap<Vec<u8>, i32>>()
+        .into_iter()
+        .for_each(|(kmer, count)| {
+            print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
         });
-    */
-    let mut buf = BufWriter::new(std::io::stdout());
-    for (UnpackedKmer(kmer), count) in unpack_kmers(kmer_map, k) {
-        print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
-    }
+
     buf.flush()?;
 
     Ok(())
@@ -95,7 +91,7 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-		process_valid_bytes(kmer_map, valid_bytestring);
+                process_valid_bytes(kmer_map, valid_bytestring);
                 i += 1;
             }
             None => {
@@ -113,22 +109,15 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
         *freq += 1;
     } else {
         let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
-        let CanonicalKmer(canonical_kmer) =
-            CanonicalKmer::from((revcompkmer, valid_bytestring));
+        let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
         let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
         *kmer_map.entry(kmer).or_insert(0) += 1;
     }
 }
 
-fn unpack_kmers(kmer_map: DashFx, k: usize) -> HashMap<UnpackedKmer, i32> {
-    kmer_map
-        .into_iter()
-        .map(|(kmer, freq)| (UnpackedKmer::from((kmer, k)), freq))
-        .collect()
-}
-
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, UnpackedKmer(kmer): UnpackedKmer, count: i32) {
     writeln!(
+        //buf.lock().unwrap(),
         buf,
         ">{}\n{}",
         count,
