@@ -78,14 +78,14 @@ fn build_kmer_map(filepath: String, k: usize) -> Result<DashFx, Box<dyn Error>> 
         .for_each(|r| {
             let record = r.expect("Error reading fasta record.");
             let seq: &[u8] = record.seq();
-            process_seq(seq, &k, &kmer_map).unwrap();
+            process_seq(seq, &k, &kmer_map);
         });
     Ok(kmer_map)
 }
 
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.
-fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
+fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
     let mut i = 0;
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
@@ -101,7 +101,6 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
             }
         }
     }
-    Ok(())
 }
 
 fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
