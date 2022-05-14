@@ -210,9 +210,10 @@ pub struct CanonicalKmer(Vec<u8>);
 
 impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
     fn from(comp: (Vec<u8>, Vec<u8>)) -> Self {
-        let canonical_kmer = match comp.0 < comp.1.to_vec() {
-            true => comp.0,
-            false => comp.1.to_vec(),
+	let (reverse_complement, kmer) = (comp.0, comp.1);
+        let canonical_kmer = match reverse_complement < kmer {
+            true => reverse_complement,
+            false => kmer,
         };
         CanonicalKmer(canonical_kmer)
     }
