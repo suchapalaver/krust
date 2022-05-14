@@ -4,7 +4,7 @@
 //! written in Rust and run from the command line that will output canonical
 //! k-mers and their frequency across the records in a fasta file.
 //!
-//! `krust` prints to `stdout`, writing, on alternate lines:  
+//! `krust` prints to `stdout`, writing, on alternate lines, just like the popular [`Jellyfish`](https://github.com/gmarcais/Jellyfish) k-mer counter:  
 //! ```>{frequency}```  
 //! ```{canonical k-mer}```  
 //!
@@ -46,12 +46,7 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
 pub type UnpackDashFx = DashMap<Vec<u8>, i32, BuildHasherDefault<FxHasher>>;
 
-///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
-/// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
-/// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
-/// hashmap of canonical k-mers (keys) and their frequency in the data (values).  
-///  - Ignores substrings containing `N`.  
-///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
+  
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
 
@@ -70,6 +65,10 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
+/// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
+/// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
+/// hashmap of canonical k-mers (keys) and their frequency in the data (values).  
 fn build_kmer_map(filepath: String, k: usize) -> Result<DashFx, Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
     let _ = fasta::Reader::from_file(&filepath)?
@@ -84,6 +83,8 @@ fn build_kmer_map(filepath: String, k: usize) -> Result<DashFx, Box<dyn Error>> 
     Ok(kmer_map)
 }
 
+///  - Ignores substrings containing `N`.  
+///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.
 fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
     let mut i = 0;
     while i <= seq.len() - k {
