@@ -183,6 +183,7 @@ pub struct RevCompKmer(Vec<u8>);
 impl From<&Vec<u8>> for RevCompKmer {
     fn from(sub: &Vec<u8>) -> Self {
         let mut revcomp = Vec::with_capacity(sub.len());
+
         for byte in sub.iter().rev() {
             let comp = RevCompKmer::complement(*byte);
             revcomp.push(comp);
@@ -194,10 +195,10 @@ impl From<&Vec<u8>> for RevCompKmer {
 impl RevCompKmer {
     fn complement(byte: u8) -> u8 {
         match byte {
-	    b'A' => b'T',
-	    b'C' => b'G',
-	    b'G' => b'C',
-	    b'T' => b'A',
+            b'A' => b'T',
+            b'C' => b'G',
+            b'G' => b'C',
+            b'T' => b'A',
             _ => panic!("`RevCompKmer::from` should only be passed valid k-mers"),
         }
     }
@@ -209,7 +210,7 @@ pub struct CanonicalKmer(Vec<u8>);
 
 impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
     fn from(comp: (Vec<u8>, Vec<u8>)) -> Self {
-	let (reverse_complement, kmer) = (comp.0, comp.1);
+        let (reverse_complement, kmer) = (comp.0, comp.1);
         let canonical_kmer = match reverse_complement < kmer {
             true => reverse_complement,
             false => kmer,
@@ -248,7 +249,7 @@ impl From<u64> for UnpackedKmerByte {
             3 => b'T',
             _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
         };
-	UnpackedKmerByte(unpacked_byte)
+        UnpackedKmerByte(unpacked_byte)
     }
 }
 
