@@ -193,14 +193,13 @@ impl From<&Vec<u8>> for RevCompKmer {
 
 impl RevCompKmer {
     fn complement(byte: u8) -> u8 {
-        let complement = match byte {
-            67_u8 => 71_u8,
-            71_u8 => 67_u8,
-            84_u8 => 65_u8,
-            65_u8 => 84_u8,
+        match byte {
+	    b'A' => b'T',
+	    b'C' => b'G',
+	    b'G' => b'C',
+	    b'T' => b'A',
             _ => panic!("`RevCompKmer::from` should only be passed valid k-mers"),
-        };
-        complement
+        }
     }
 }
 
