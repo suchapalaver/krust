@@ -54,10 +54,14 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .par_bridge()
         .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from((bitpacked_kmer, k)).0, freq))
-        .collect::<HashMap<Vec<u8>, i32>>()
+        .map(|(unpacked_kmer, freq)| {
+	    let kmer_str = String::from_utf8(unpacked_kmer).unwrap();
+	    (kmer_str, freq)
+	})
+        .collect::<HashMap<String, i32>>()
         .into_iter()
         .for_each(|(kmer, count)| {
-            print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
+            print_kmer_map(&mut buf, kmer, count);
         });
 
     buf.flush()?;
@@ -115,12 +119,12 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
     }
 }
 
-fn print_kmer_map(buf: &mut BufWriter<Stdout>, UnpackedKmer(kmer): UnpackedKmer, count: i32) {
+fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
     writeln!(
         buf,
         ">{}\n{}",
         count,
-        std::str::from_utf8(kmer.as_slice()).unwrap()
+        kmer
     )
     .expect("Unable to write output.");
 }
