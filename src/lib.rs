@@ -8,6 +8,8 @@
 //! ```>{frequency}```  
 //! ```{canonical k-mer}```  
 //!
+//! `krust` has been tested throughout production against [`jellyfish`](https://github.com/gmarcais/Jellyfish)'s results for the same data sets.
+//!
 //! `krust` uses [`dashmap`](https://docs.rs/crate/dashmap/4.0.2),
 //! [`rust-bio`](https://docs.rs/bio/0.38.0/bio/), [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 //! and [`fxhash`](https://crates.io/crates/fxhash).
@@ -46,7 +48,6 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
 pub type UnpackDashFx = DashMap<Vec<u8>, i32, BuildHasherDefault<FxHasher>>;
 
-  
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
 
@@ -54,10 +55,13 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .par_bridge()
         .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from((bitpacked_kmer, k)).0, freq))
+        .collect::<HashMap<Vec<u8>, i32>>()
+        .into_iter()
+        .par_bridge()
         .map(|(unpacked_kmer, freq)| {
-	    let kmer_str = String::from_utf8(unpacked_kmer).unwrap();
-	    (kmer_str, freq)
-	})
+            let kmer_str = String::from_utf8(unpacked_kmer).unwrap();
+            (kmer_str, freq)
+        })
         .collect::<HashMap<String, i32>>()
         .into_iter()
         .for_each(|(kmer, count)| {
@@ -120,13 +124,7 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
 }
 
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
-    writeln!(
-        buf,
-        ">{}\n{}",
-        count,
-        kmer
-    )
-    .expect("Unable to write output.");
+    writeln!(buf, ">{}\n{}", count, kmer).expect("Unable to write output.");
 }
 
 /// Creating a valid k-mer bytestring.
