@@ -51,6 +51,8 @@ pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 ///  - Ignores substrings containing `N`.  
 ///  - Canonicalizes by lexicographically smaller of k-mer/reverse-complement.  
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
+    let kmer_map: DashFx = build_kmer_map(filepath, k)?;
+    /*
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
     let _ = fasta::Reader::from_file(&filepath)?
@@ -62,6 +64,7 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
             let seq: &[u8] = record.seq();
             process_seq(seq, &k, &kmer_map).unwrap();
         });
+    */
     let mut buf = BufWriter::new(std::io::stdout());
     for (UnpackedKmer(kmer), count) in unpack_kmers(kmer_map, k) {
         print_kmer_map(&mut buf, UnpackedKmer(kmer), count);
@@ -71,6 +74,20 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn build_kmer_map(filepath: String, k: usize) -> Result<DashFx, Box<dyn Error>> {
+    let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
+    let _ = fasta::Reader::from_file(&filepath)?
+        .records()
+        .into_iter()
+        .par_bridge()
+        .for_each(|r| {
+            let record = r.expect("Error reading fasta record.");
+            let seq: &[u8] = record.seq();
+            process_seq(seq, &k, &kmer_map).unwrap();
+        });
+    Ok(kmer_map)
+}
+
 fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn Error>> {
     let mut i = 0;
     while i <= seq.len() - k {
@@ -78,7 +95,7 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) -> Result<(), Box<dyn E
         let bytestring = Kmer::new(sub);
         match bytestring {
             Some(Kmer(valid_bytestring)) => {
-		process_valid_bytes(&kmer_map, valid_bytestring);
+		process_valid_bytes(kmer_map, valid_bytestring);
                 i += 1;
             }
             None => {
