@@ -241,13 +241,14 @@ pub struct UnpackedKmerByte(u8);
 
 impl From<u64> for UnpackedKmerByte {
     fn from(base: u64) -> Self {
-        match base {
-            0 => UnpackedKmerByte(b'A'),
-            1 => UnpackedKmerByte(b'C'),
-            2 => UnpackedKmerByte(b'G'),
-            3 => UnpackedKmerByte(b'T'),
+        let unpacked_byte = match base {
+            0 => b'A',
+            1 => b'C',
+            2 => b'G',
+            3 => b'T',
             _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
-        }
+        };
+	UnpackedKmerByte(unpacked_byte)
     }
 }
 
