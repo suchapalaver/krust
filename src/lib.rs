@@ -117,7 +117,6 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
 
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, UnpackedKmer(kmer): UnpackedKmer, count: i32) {
     writeln!(
-        //buf.lock().unwrap(),
         buf,
         ">{}\n{}",
         count,
