@@ -108,14 +108,21 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
     }
 }
 
+/// Converts a valid sequence substring from a bytes string to a u64.  
 fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
     let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+    // If the k-mer as found in the sequence is already a key in the `Dashmap`,
+    // increment its value and move on.
     if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
         *freq += 1;
     } else {
+	// Initialize the reverse complement of this so-far unrecorded k-mer.
         let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
+	// Find the alphabetically less of the k-mer substring and its reverse complement. 
         let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
+	// Compress the canonical k-mer into a bitpacked 64-bit unsigned integer. 
         let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
+	// Add k-mer key and initial value to results.
         *kmer_map.entry(kmer).or_insert(0) += 1;
     }
 }
