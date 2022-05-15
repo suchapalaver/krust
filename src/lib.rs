@@ -55,9 +55,6 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .par_bridge()
         .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from((bitpacked_kmer, k)).0, freq))
-        .collect::<HashMap<Vec<u8>, i32>>()
-        .into_iter()
-        .par_bridge()
         .map(|(unpacked_kmer, freq)| {
             let kmer_str = String::from_utf8(unpacked_kmer).unwrap();
             (kmer_str, freq)
