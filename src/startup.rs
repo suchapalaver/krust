@@ -8,6 +8,7 @@ use std::{
     hash::BuildHasherDefault,
     io::{BufWriter, Stdout, Write},
 };
+use crate::kmer::Kmer;
 
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
