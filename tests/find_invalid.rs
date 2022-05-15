@@ -1,4 +1,4 @@
-use krust::startup::Kmer;
+use krust::kmer::Kmer;
 
 #[test]
 fn find_invalid_works1() {
