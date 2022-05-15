@@ -100,32 +100,6 @@ fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
     writeln!(buf, ">{}\n{}", count, kmer).expect("Unable to write output.");
 }
 
-/// Creating a valid k-mer bytestring.
-#[derive(Debug, PartialEq)]
-pub struct Kmer(pub Vec<u8>);
-
-impl Kmer {
-    pub fn new(sub: &[u8]) -> Option<Kmer> {
-        if !sub.contains(&b'N') {
-            let valid_kmer = sub.to_vec();
-            Some(Kmer(valid_kmer))
-        } else {
-            None
-        }
-    }
-
-    /// Find the index of the rightmost invalid byte in an invalid bytestring.
-    pub fn find_invalid(sub: &[u8]) -> usize {
-        match sub
-            .iter()
-            .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
-        {
-            Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
-            None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
-        }
-    }
-}
-
 /// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
 pub struct BitpackedKmer(u64);
 
