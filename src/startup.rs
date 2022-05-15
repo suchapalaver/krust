@@ -12,6 +12,7 @@ use std::{
     hash::BuildHasherDefault,
     io::{BufWriter, Stdout, Write},
 };
+use crate::dashmaps::DashFx;
 
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
@@ -34,17 +35,6 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-/// A custom `DashMap` w/ `FxHasher`.
-///
-/// ```use dashmap::DashMap;```
-/// ```use fxhash::FxHasher;```
-/// ```// skip```
-/// ```let dashfx_hash: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());```
-/// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust).
-pub type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
-
-pub type UnpackDashFx = DashMap<Vec<u8>, i32, BuildHasherDefault<FxHasher>>;
 
 ///  - Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
