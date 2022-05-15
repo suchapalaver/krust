@@ -226,8 +226,3 @@ impl From<u64> for UnpackedKmerByte {
         UnpackedKmerByte(unpacked_byte)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}
