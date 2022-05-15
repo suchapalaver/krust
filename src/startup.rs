@@ -1,3 +1,5 @@
+use crate::bitpacked_kmer::BitpackedKmer;
+use crate::kmer::Kmer;
 use bio::io::fasta;
 use dashmap::DashMap;
 use fxhash::FxHasher;
@@ -8,7 +10,6 @@ use std::{
     hash::BuildHasherDefault,
     io::{BufWriter, Stdout, Write},
 };
-use crate::kmer::Kmer;
 
 pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
@@ -99,30 +100,6 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
 
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
     writeln!(buf, ">{}\n{}", count, kmer).expect("Unable to write output.");
-}
-
-/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
-pub struct BitpackedKmer(u64);
-
-impl From<&Vec<u8>> for BitpackedKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        let bitpacked_kmer: u64 = {
-            let mut k: u64 = 0;
-            for byte in sub.iter() {
-                k <<= 2;
-                let mask = match *byte {
-                    b'A' => 0,
-                    b'C' => 1,
-                    b'G' => 2,
-                    b'T' => 3,
-                    _ => panic!("`BitpackerKmer` handling an invalid k-mer bytestring is unexpected behavior"),
-                };
-                k |= mask;
-            }
-            k
-        };
-        BitpackedKmer(bitpacked_kmer)
-    }
 }
 
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
