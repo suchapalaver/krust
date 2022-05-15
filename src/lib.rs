@@ -5,3 +5,4 @@ pub mod dashmaps;
 pub mod kmer;
 pub mod revcomp_kmer;
 pub mod startup;
+pub mod unpacked_kmer;

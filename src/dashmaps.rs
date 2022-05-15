@@ -1,6 +1,6 @@
-use std::hash::BuildHasherDefault;
 use dashmap::DashMap;
 use fxhash::FxHasher;
+use std::hash::BuildHasherDefault;
 
 /// A custom `DashMap` w/ `FxHasher`.
 ///
