@@ -1,4 +1,5 @@
 use crate::bitpacked_kmer::BitpackedKmer;
+use crate::canonical_kmer::CanonicalKmer;
 use crate::kmer::Kmer;
 use crate::revcomp_kmer::RevCompKmer;
 use bio::io::fasta;
@@ -101,22 +102,6 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
 
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
     writeln!(buf, ">{}\n{}", count, kmer).expect("Unable to write output.");
-}
-
-/// Find the canonical kmer
-/// --the alphabetically smaller of the substring and its reverse complement.
-pub struct CanonicalKmer(Vec<u8>);
-
-impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
-    fn from(comp: (Vec<u8>, Vec<u8>)) -> Self {
-        let (reverse_complement, kmer) = (comp.0, comp.1);
-        let canonical_kmer = if reverse_complement.cmp(&kmer) == std::cmp::Ordering::Less {
-            reverse_complement
-        } else {
-            kmer
-        };
-        CanonicalKmer(canonical_kmer)
-    }
 }
 
 /// Unpacking compressed, bitpacked k-mer data.
