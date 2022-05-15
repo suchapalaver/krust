@@ -102,7 +102,7 @@ fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
 
 /// Creating a valid k-mer bytestring.
 #[derive(Debug, PartialEq)]
-pub struct Kmer(Vec<u8>);
+pub struct Kmer(pub Vec<u8>);
 
 impl Kmer {
     pub fn new(sub: &[u8]) -> Option<Kmer> {
