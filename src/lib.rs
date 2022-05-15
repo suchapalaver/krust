@@ -95,16 +95,13 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
         let bytestring = Kmer::new(sub);
-        match bytestring {
-            Some(Kmer(valid_bytestring)) => {
-                process_valid_bytes(kmer_map, valid_bytestring);
-                i += 1;
-            }
-            None => {
-                let invalid_byte_index = Kmer::find_invalid(sub);
-                i += invalid_byte_index + 1;
-            }
-        }
+        if let Some(Kmer(valid_bytestring)) = bytestring {
+	    process_valid_bytes(kmer_map, valid_bytestring);
+            i += 1;
+	} else {
+	    let invalid_byte_index = Kmer::find_invalid(sub);
+            i += invalid_byte_index + 1;
+	}
     }
 }
 
