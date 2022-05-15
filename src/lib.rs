@@ -137,13 +137,12 @@ pub struct Kmer(Vec<u8>);
 
 impl Kmer {
     fn new(sub: &[u8]) -> Option<Kmer> {
-        match !sub.contains(&b'N') {
-            true => {
-                let valid_kmer = sub.to_vec();
-                Some(Kmer(valid_kmer))
-            }
-            false => None,
-        }
+	if !sub.contains(&b'N') {
+	    let valid_kmer = sub.to_vec();
+            Some(Kmer(valid_kmer))
+	} else {
+	    None
+	}
     }
 
     /// Find the index of the rightmost invalid byte in an invalid bytestring.
