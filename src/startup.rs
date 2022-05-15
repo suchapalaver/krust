@@ -105,7 +105,7 @@ fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
 pub struct Kmer(Vec<u8>);
 
 impl Kmer {
-    fn new(sub: &[u8]) -> Option<Kmer> {
+    pub fn new(sub: &[u8]) -> Option<Kmer> {
         if !sub.contains(&b'N') {
             let valid_kmer = sub.to_vec();
             Some(Kmer(valid_kmer))
@@ -230,28 +230,4 @@ impl From<u64> for UnpackedKmerByte {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn kmer_new_returns_valid_kmer() {
-        let dna = "CATAG".as_bytes();
-        let result = {
-            match Kmer::new(dna) {
-                Some(Kmer(valid_bytestring)) => valid_bytestring,
-                None => vec![b'N'; 5],
-            }
-        };
-        assert_eq!("CATAG".as_bytes().to_vec(), result);
-    }
-
-    #[test]
-    fn kmer_new_returns_none_for_invalid_kmer() {
-        let dna = "CANAG".as_bytes();
-        let result = {
-            match Kmer::new(dna) {
-                Some(x) => Some(x),
-                None => None,
-            }
-        };
-        assert_eq!(None, result);
-    }
 }
