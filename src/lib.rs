@@ -116,13 +116,13 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
     if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
         *freq += 1;
     } else {
-	// Initialize the reverse complement of this so-far unrecorded k-mer.
+        // Initialize the reverse complement of this so-far unrecorded k-mer.
         let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
-	// Find the alphabetically less of the k-mer substring and its reverse complement. 
+        // Find the alphabetically less of the k-mer substring and its reverse complement.
         let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
-	// Compress the canonical k-mer into a bitpacked 64-bit unsigned integer. 
+        // Compress the canonical k-mer into a bitpacked 64-bit unsigned integer.
         let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
-	// Add k-mer key and initial value to results.
+        // Add k-mer key and initial value to results.
         *kmer_map.entry(kmer).or_insert(0) += 1;
     }
 }
@@ -216,12 +216,10 @@ pub struct CanonicalKmer(Vec<u8>);
 impl From<(Vec<u8>, Vec<u8>)> for CanonicalKmer {
     fn from(comp: (Vec<u8>, Vec<u8>)) -> Self {
         let (reverse_complement, kmer) = (comp.0, comp.1);
-        let canonical_kmer = match reverse_complement.cmp(&kmer) {
-            std::cmp::Ordering::Less => reverse_complement,
-            std::cmp::Ordering::Greater => kmer,
-            std::cmp::Ordering::Equal => {
-                panic!("Kmer and reverse complement can't be alphabetically equal?")
-            }
+        let canonical_kmer = if reverse_complement.cmp(&kmer) == std::cmp::Ordering::Less {
+            reverse_complement
+        } else {
+            kmer
         };
         CanonicalKmer(canonical_kmer)
     }
