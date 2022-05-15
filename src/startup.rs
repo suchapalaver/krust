@@ -1,5 +1,6 @@
 use crate::bitpacked_kmer::BitpackedKmer;
 use crate::kmer::Kmer;
+use crate::revcomp_kmer::RevCompKmer;
 use bio::io::fasta;
 use dashmap::DashMap;
 use fxhash::FxHasher;
@@ -100,33 +101,6 @@ fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
 
 fn print_kmer_map(buf: &mut BufWriter<Stdout>, kmer: String, count: i32) {
     writeln!(buf, ">{}\n{}", count, kmer).expect("Unable to write output.");
-}
-
-/// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
-pub struct RevCompKmer(Vec<u8>);
-
-impl From<&Vec<u8>> for RevCompKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        let mut revcomp = Vec::with_capacity(sub.len());
-
-        for byte in sub.iter().rev() {
-            let comp = RevCompKmer::complement(*byte);
-            revcomp.push(comp);
-        }
-        RevCompKmer(revcomp)
-    }
-}
-
-impl RevCompKmer {
-    fn complement(byte: u8) -> u8 {
-        match byte {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            b'T' => b'A',
-            _ => panic!("`RevCompKmer::from` should only be passed valid k-mers"),
-        }
-    }
 }
 
 /// Find the canonical kmer
