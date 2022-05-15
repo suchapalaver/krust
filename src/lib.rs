@@ -31,11 +31,12 @@ use fxhash::FxHasher;
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
-    env,
     error::Error,
     hash::BuildHasherDefault,
     io::{BufWriter, Stdout, Write},
 };
+
+pub mod configuration;
 
 /// A custom `DashMap` w/ `FxHasher`.  
 ///  
@@ -96,12 +97,12 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
         let sub = &seq[i..i + k];
         let bytestring = Kmer::new(sub);
         if let Some(Kmer(valid_bytestring)) = bytestring {
-	    process_valid_bytes(kmer_map, valid_bytestring);
+            process_valid_bytes(kmer_map, valid_bytestring);
             i += 1;
-	} else {
-	    let invalid_byte_index = Kmer::find_invalid(sub);
+        } else {
+            let invalid_byte_index = Kmer::find_invalid(sub);
             i += invalid_byte_index + 1;
-	}
+        }
     }
 }
 
@@ -134,12 +135,12 @@ pub struct Kmer(Vec<u8>);
 
 impl Kmer {
     fn new(sub: &[u8]) -> Option<Kmer> {
-	if !sub.contains(&b'N') {
-	    let valid_kmer = sub.to_vec();
+        if !sub.contains(&b'N') {
+            let valid_kmer = sub.to_vec();
             Some(Kmer(valid_kmer))
-	} else {
-	    None
-	}
+        } else {
+            None
+        }
     }
 
     /// Find the index of the rightmost invalid byte in an invalid bytestring.
@@ -252,32 +253,6 @@ impl From<u64> for UnpackedKmerByte {
             _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
         };
         UnpackedKmerByte(unpacked_byte)
-    }
-}
-
-/// Parsing command line k-size and filepath arguments.
-pub struct Config {
-    pub kmer_len: usize,
-    pub filepath: String,
-}
-
-impl Config {
-    pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
-        let kmer_len: usize = match args.nth(1) {
-            Some(arg) => match arg.parse() {
-                Ok(kmer_len) if kmer_len > 0 && kmer_len < 33 => kmer_len,
-                Ok(_) => return Err("k-mer length needs to be larger than zero and, for `krust` in its current working form, no more than 32".into()),
-                Err(_) => return Err(format!("issue with k-mer length argument: {}", arg).into()),
-            },
-            None => return Err("k-mer length input required".into()),
-        };
-
-        let filepath = match args.next() {
-            Some(arg) => arg,
-            None => return Err("filepath argument needed".into()),
-        };
-
-        Ok(Config { kmer_len, filepath })
     }
 }
 
