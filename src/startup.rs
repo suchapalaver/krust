@@ -74,7 +74,8 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
 
 /// Converts a valid sequence substring from a bytes string to a u64.
 fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
-    let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+    let BitpackedKmer(bitpacked_kmer) = valid_bytestring.iter().cloned().collect();
+    //let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
     // If the k-mer as found in the sequence is already a key in the `Dashmap`,
     // increment its value and move on.
     if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
