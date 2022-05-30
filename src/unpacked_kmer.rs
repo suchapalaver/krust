@@ -2,17 +2,27 @@
 #[derive(Hash, PartialEq, Eq)]
 pub struct UnpackedKmer(pub Vec<u8>);
 
+impl UnpackedKmer {
+    fn new(k: usize) -> UnpackedKmer {
+        UnpackedKmer(Vec::with_capacity(k))
+    }
+
+    fn add(&mut self, elem: u8) {
+        self.0.push(elem);
+    }
+}
+
 impl From<(u64, usize)> for UnpackedKmer {
     fn from(kmer_data: (u64, usize)) -> Self {
         let (kmer, k) = (kmer_data.0, kmer_data.1);
-        let mut byte_string = Vec::with_capacity(k);
+        let mut unpacked_kmer = UnpackedKmer::new(k);
         for i in 0..k {
             let isolate = kmer << ((i * 2) + 64 - (k * 2));
             let base = isolate >> 62;
             let byte = UnpackedKmerByte::from(base);
-            byte_string.push(byte.0);
+            unpacked_kmer.add(byte.0);
         }
-        UnpackedKmer(byte_string)
+        unpacked_kmer
     }
 }
 
