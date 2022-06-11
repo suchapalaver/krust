@@ -61,8 +61,9 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
     let mut i = 0;
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
-        let bytestring = Kmer::new(sub);
-        if let Some(Kmer(valid_bytestring)) = bytestring {
+        let bytestring = Kmer::from_substring(sub);
+        //let bytestring = Kmer(sub.to_vec());
+        if let Ok(Kmer(valid_bytestring)) = bytestring {
             process_valid_bytes(kmer_map, valid_bytestring);
             i += 1;
         } else {
