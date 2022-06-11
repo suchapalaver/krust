@@ -12,23 +12,26 @@ impl Kmer {
     }
 
     pub fn from_substring(sub: &[u8]) -> Result<Self, ()> {
-        sub.into_iter()
-            .map(|b| match b.parse_valid_byte() {
-                Ok(b) => Ok(b),
-                Err(()) => return Err(()),
-            })
-            .collect::<Result<Kmer, ()>>()
+        sub.iter()
+            .map(|b| b.parse_valid_byte())
+            .collect()
     }
 
     /// Find the index of the rightmost invalid byte in an invalid bytestring.
     pub fn find_invalid(sub: &[u8]) -> usize {
         match sub
             .iter()
-            .rposition(|byte| ![b'A', b'C', b'G', b'T'].contains(byte))
+	    .rposition(|byte| byte.parse_valid_byte().is_err())
         {
             Some(rightmost_invalid_byte_index) => rightmost_invalid_byte_index,
             None => panic!("Valid bytestring passed to `find_invalid`, which is a bug."),
         }
+    }
+}
+
+impl Default for Kmer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -51,9 +54,10 @@ trait Validity {
 
 impl Validity for u8 {
     fn parse_valid_byte(self) -> Result<Self, ()> {
-        match &[b'A', b'C', b'G', b'T'].contains(&self) {
-            true => Ok(self),
-            false => Err(()),
+        if [b'A', b'C', b'G', b'T'].contains(&self) {
+            Ok(self)
+	} else {
+            Err(())
         }
     }
 }
@@ -69,9 +73,18 @@ pub mod test {
             Ok(k) => insta::assert_snapshot!(format!("{:?}", k), @"Kmer([67, 65, 71, 84])"),
             Err(()) => panic!("this should not happen"),
         }
+    }
 
-        let sub = &[b'C', b'N', b'G', b'T'];
-        let k = Kmer::from_substring(sub);
+     #[test]
+    fn test_parse_valid_byte() {
+	let sub = &[b'C', b'N', b'G', b'T'];
+	assert!(sub[1].parse_valid_byte().is_err());
+    }
+
+    #[test]
+    fn test_from_substring_returns_err_for_invalid_substring() {
+	let sub = &[b'C', b'N', b'G', b'T'];
+	let k = Kmer::from_substring(sub);
 	assert!(k.is_err());
     }
 }
