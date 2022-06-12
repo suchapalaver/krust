@@ -1,5 +1,4 @@
 use crate::bitpacked_kmer::BitpackedKmer;
-use crate::canonical_kmer::CanonicalKmer;
 use crate::dashmaps::DashFx;
 use crate::kmer::Kmer;
 use crate::revcomp_kmer::RevCompKmer;
@@ -21,7 +20,7 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
     let _print_results = build_kmer_map(filepath, k)?
         .into_iter()
         .par_bridge()
-        .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from((bitpacked_kmer, k)).0, freq))
+        .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from_kmer_data(bitpacked_kmer, k).0, freq))
         .map(|(unpacked_kmer, freq)| {
             let kmer_str = String::from_utf8(unpacked_kmer).unwrap();
             (kmer_str, freq)
@@ -61,35 +60,32 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
     let mut i = 0;
     while i <= seq.len() - k {
         let sub = &seq[i..i + k];
-        let bytestring = Kmer::from_substring(sub);
-        //let bytestring = Kmer(sub.to_vec());
-        if let Ok(Kmer(valid_bytestring)) = bytestring {
-            process_valid_bytes(kmer_map, valid_bytestring);
+        if let Ok(kmer) = Kmer::from_substring(sub) {
+            process_valid_bytes(kmer_map, kmer);
             i += 1;
         } else {
-            let invalid_byte_index = Kmer::find_invalid(sub);
+            let invalid_byte_index = Kmer::find_invalid_byte_index(sub);
             i += invalid_byte_index + 1;
         }
     }
 }
 
 /// Converts a valid sequence substring from a bytes string to a u64.
-fn process_valid_bytes(kmer_map: &DashFx, valid_bytestring: Vec<u8>) {
-    let BitpackedKmer(bitpacked_kmer) = valid_bytestring.iter().cloned().collect();
-    //let BitpackedKmer(bitpacked_kmer) = BitpackedKmer::from(&valid_bytestring);
+fn process_valid_bytes(kmer_map: &DashFx, kmer: Kmer) {
+    let BitpackedKmer(bitpacked_kmer) = kmer.0.iter().cloned().collect();
     // If the k-mer as found in the sequence is already a key in the `Dashmap`,
     // increment its value and move on.
     if let Some(mut freq) = kmer_map.get_mut(&bitpacked_kmer) {
         *freq += 1;
     } else {
         // Initialize the reverse complement of this so-far unrecorded k-mer.
-        let RevCompKmer(revcompkmer) = RevCompKmer::from(&valid_bytestring);
+        let RevCompKmer(revcompkmer) = RevCompKmer::from_kmer(&kmer);
         // Find the alphabetically less of the k-mer substring and its reverse complement.
-        let CanonicalKmer(canonical_kmer) = CanonicalKmer::from((revcompkmer, valid_bytestring));
+        let canonical_kmer = Kmer::get_canonical_kmer(revcompkmer, kmer.0);
         // Compress the canonical k-mer into a bitpacked 64-bit unsigned integer.
-        let BitpackedKmer(kmer) = BitpackedKmer::from(&canonical_kmer);
+        let kmer: BitpackedKmer = canonical_kmer.0.into_iter().collect();
         // Add k-mer key and initial value to results.
-        *kmer_map.entry(kmer).or_insert(0) += 1;
+        *kmer_map.entry(kmer.0).or_insert(0) += 1;
     }
 }
 

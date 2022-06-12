@@ -3,41 +3,64 @@
 pub struct UnpackedKmer(pub Vec<u8>);
 
 impl UnpackedKmer {
-    fn new(k: usize) -> UnpackedKmer {
-        UnpackedKmer(Vec::with_capacity(k))
+    fn new() -> UnpackedKmer {
+        UnpackedKmer(Vec::new())
     }
 
     fn add(&mut self, elem: u8) {
         self.0.push(elem);
     }
-}
 
-impl From<(u64, usize)> for UnpackedKmer {
-    fn from(kmer_data: (u64, usize)) -> Self {
-        let (kmer, k) = (kmer_data.0, kmer_data.1);
-        let mut unpacked_kmer = UnpackedKmer::new(k);
-        for i in 0..k {
-            let isolate = kmer << ((i * 2) + 64 - (k * 2));
-            let base = isolate >> 62;
-            let byte = UnpackedKmerByte::from(base);
-            unpacked_kmer.add(byte.0);
-        }
-        unpacked_kmer
+    pub fn from_kmer_data(kmer: u64, k: usize) -> Self {
+        (0..k)
+            .into_iter()
+            .map(|i| kmer.isolate_bits(i, k).replace_bits().unpack_bits())
+            .collect()
     }
 }
 
-/// Unpacking compressed, bitpacked k-mer data.
-struct UnpackedKmerByte(u8);
+trait Unpack {
+    fn unpack_bits(self) -> u8
+    where
+        Self: Sized;
 
-impl From<u64> for UnpackedKmerByte {
-    fn from(base: u64) -> Self {
-        let unpacked_byte = match base {
-            0 => b'A',
-            1 => b'C',
-            2 => b'G',
-            3 => b'T',
-            _ => panic!("An invalid k-mer passed to here means we have a serious bug"),
-        };
-        UnpackedKmerByte(unpacked_byte)
+    fn isolate_bits(self, i: usize, k: usize) -> Self
+    where
+        Self: Sized;
+
+    fn replace_bits(self) -> Self
+    where
+        Self: Sized;
+}
+
+impl Unpack for u64 {
+    fn unpack_bits(self: u64) -> u8 {
+        if self == 0 {
+            b'A'
+        } else if self == 1 {
+            b'C'
+        } else if self == 2 {
+            b'G'
+        } else {
+            b'T'
+        }
+    }
+    fn isolate_bits(self: u64, i: usize, k: usize) -> Self {
+        self << ((i * 2) + 64 - (k * 2))
+    }
+
+    fn replace_bits(self) -> Self {
+        self >> 62
+    }
+}
+
+impl FromIterator<u8> for UnpackedKmer {
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+        let mut c = UnpackedKmer::new();
+
+        for i in iter {
+            c.add(i)
+        }
+        c
     }
 }

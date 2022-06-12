@@ -1,26 +1,53 @@
+use crate::kmer::Kmer;
+
+trait Complementary {
+    fn parse_complement_byte(self) -> Self
+    where
+        Self: Sized;
+}
+
+impl Complementary for u8 {
+    fn parse_complement_byte(self) -> Self {
+        if self == b'A' {
+            b'T'
+        } else if self == b'C' {
+            b'G'
+        } else if self == b'G' {
+            b'C'
+        } else {
+            b'A'
+        }
+    }
+}
+
 /// Converting a DNA string slice into its [reverse compliment](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity).
 pub struct RevCompKmer(pub Vec<u8>);
 
-impl From<&Vec<u8>> for RevCompKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        let mut revcomp = Vec::with_capacity(sub.len());
+impl FromIterator<u8> for RevCompKmer {
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+        let mut c = RevCompKmer::new();
 
-        for byte in sub.iter().rev() {
-            let comp = RevCompKmer::complement(*byte);
-            revcomp.push(comp);
+        for i in iter {
+            c.add(i)
         }
-        RevCompKmer(revcomp)
+        c
     }
 }
 
 impl RevCompKmer {
-    fn complement(byte: u8) -> u8 {
-        match byte {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            b'T' => b'A',
-            _ => panic!("`RevCompKmer::from` should only be passed valid k-mers"),
-        }
+    fn new() -> Self {
+        Self(vec![])
+    }
+
+    fn add(&mut self, elem: u8) {
+        self.0.push(elem)
+    }
+
+    pub fn from_kmer(kmer: &Kmer) -> Self {
+        kmer.0
+            .iter()
+            .rev()
+            .map(|byte| byte.parse_complement_byte())
+            .collect()
     }
 }

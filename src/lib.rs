@@ -26,7 +26,6 @@
 //! - Testing!
 
 pub mod bitpacked_kmer;
-pub mod canonical_kmer;
 pub mod configuration;
 pub mod dashmaps;
 pub mod kmer;

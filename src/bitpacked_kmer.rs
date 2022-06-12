@@ -7,46 +7,44 @@ impl BitpackedKmer {
     }
 
     fn pack(&mut self, elem: u8) {
-        self.0 <<= 2;
-        let mask = match elem {
-            b'A' => 0,
-            b'C' => 1,
-            b'G' => 2,
-            b'T' => 3,
-            _ => panic!("`BitpackerKmer` handling an invalid k-mer bytestring is unexpected behavior"),
-        };
-        self.0 |= mask;
+        self.shift();
+        let mask = elem.pack_convert();
+        self.0 |= mask
+    }
+
+    fn shift(&mut self) {
+        self.0 <<= 2
     }
 }
 
 impl FromIterator<u8> for BitpackedKmer {
-    fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
         let mut c = BitpackedKmer::new();
 
         for i in iter {
-            c.pack(i);
+            c.pack(i)
         }
         c
     }
 }
 
-impl From<&Vec<u8>> for BitpackedKmer {
-    fn from(sub: &Vec<u8>) -> Self {
-        let bitpacked_kmer: u64 = {
-            let mut k: u64 = 0;
-            for byte in sub.iter() {
-                k <<= 2;
-                let mask = match *byte {
-                    b'A' => 0,
-                    b'C' => 1,
-                    b'G' => 2,
-                    b'T' => 3,
-                    _ => panic!("`BitpackerKmer` handling an invalid k-mer bytestring is unexpected behavior"),
-                };
-                k |= mask;
-            }
-            k
-        };
-        BitpackedKmer(bitpacked_kmer)
+trait Pack {
+    fn pack_convert(self) -> u64
+    where
+        Self: Sized;
+}
+
+impl Pack for u8 {
+    fn pack_convert(self) -> u64 {
+        if self == b'A' {
+            0
+        } else if self == b'C' {
+            1
+        } else if self == b'G' {
+            2
+        } else {
+            // can only be b'T'
+            3
+        }
     }
 }
