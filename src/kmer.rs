@@ -82,7 +82,7 @@ pub mod test {
     fn test_from_substring() {
         let sub = &[b'C', b'A', b'G', b'T', b'G'];
         let k = Kmer::from_substring(sub).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k), @"Kmer([67, 65, 71, 84])");
+        insta::assert_snapshot!(format!("{:?}", k), @"Kmer([67, 65, 71, 84, 71])");
     }
 
     #[test]

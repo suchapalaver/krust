@@ -1,4 +1,4 @@
-use krust::kmer::Kmer;
+//use krust::kmer::Kmer;
 /*
 #[test]
 fn kmer_new_returns_valid_kmer() {
