@@ -35,14 +35,11 @@ trait Unpack {
 
 impl Unpack for u64 {
     fn unpack_bits(self: u64) -> u8 {
-        if self == 0 {
-            b'A'
-        } else if self == 1 {
-            b'C'
-        } else if self == 2 {
-            b'G'
-        } else {
-            b'T'
+        match self {
+            0 => b'A',
+            1 => b'C',
+            2 => b'G',
+            _ => b'T',
         }
     }
     fn isolate_bits(self: u64, i: usize, k: usize) -> Self {

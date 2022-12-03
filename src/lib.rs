@@ -16,9 +16,9 @@
 //!
 //! Run `krust` on the test data in the [`krust` Github repo](https://github.com/suchapalaver/krust),
 //! searching for kmers of length 5, like this:
-//! ```$ cargo run --release 5 cerevisae.pan.fa > output.tsv```
+//! ```$ cargo run --release 5 path/to/cerevisae.pan.fa > output.tsv```
 //! or, searching for kmers of length 21:
-//! ```$ cargo run --release 21 cerevisae.pan.fa > output.tsv```
+//! ```$ cargo run --release 21 path/to/cerevisae.pan.fa > output.tsv```
 //!
 //! Future:
 //! - ```fn single_sequence_canonical_kmers(filepath: String, k: usize) {}```

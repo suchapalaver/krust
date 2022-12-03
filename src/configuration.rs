@@ -1,6 +1,6 @@
 use std::{env, error::Error, path::PathBuf};
 
-/// Parsing command line k-size and filepath arguments.
+/// Parsing command line k-size and filepath arguments
 pub struct Config {
     pub k: usize,
     pub path: PathBuf,

@@ -1,4 +1,4 @@
-/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers.
+/// Compressing k-mers of length `0 < k < 33`, bitpacking them into unsigned integers
 pub struct BitpackedKmer(pub u64);
 
 impl BitpackedKmer {
@@ -36,15 +36,12 @@ trait Pack {
 
 impl Pack for u8 {
     fn pack_convert(self) -> u64 {
-        if self == b'A' {
-            0
-        } else if self == b'C' {
-            1
-        } else if self == b'G' {
-            2
-        } else {
+        match self {
+            b'A' => 0,
+            b'C' => 1,
+            b'G' => 2,
             // can only be b'T'
-            3
+            _ => 3,
         }
     }
 }

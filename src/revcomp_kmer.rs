@@ -8,14 +8,11 @@ trait Complementary {
 
 impl Complementary for u8 {
     fn parse_complement_byte(self) -> Self {
-        if self == b'A' {
-            b'T'
-        } else if self == b'C' {
-            b'G'
-        } else if self == b'G' {
-            b'C'
-        } else {
-            b'A'
+        match self {
+            b'A' => b'T',
+            b'C' => b'G',
+            b'G' => b'C',
+            _ => b'A',
         }
     }
 }
