@@ -12,12 +12,13 @@ use std::{
     error::Error,
     hash::BuildHasherDefault,
     io::{BufWriter, Stdout, Write},
+    path::Path,
 };
 
-pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
+pub fn run<P: AsRef<Path> + std::fmt::Debug>(path: P, k: usize) -> Result<(), Box<dyn Error>> {
     let mut buf = BufWriter::new(std::io::stdout());
 
-    let _print_results = build_kmer_map(filepath, k)?
+    build_kmer_map(path, k)?
         .into_iter()
         .par_bridge()
         .map(|(bitpacked_kmer, freq)| (UnpackedKmer::from_kmer_data(bitpacked_kmer, k).0, freq))
@@ -40,9 +41,12 @@ pub fn run(filepath: String, k: usize) -> Result<(), Box<dyn Error>> {
 /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
 /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
 /// hashmap of canonical k-mers (keys) and their frequency in the data (values).
-fn build_kmer_map(filepath: String, k: usize) -> Result<DashFx, Box<dyn Error>> {
+fn build_kmer_map<P: AsRef<Path> + std::fmt::Debug>(
+    path: P,
+    k: usize,
+) -> Result<DashFx, Box<dyn Error>> {
     let kmer_map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
-    let _ = fasta::Reader::from_file(&filepath)?
+    fasta::Reader::from_file(path)?
         .records()
         .into_iter()
         .par_bridge()
