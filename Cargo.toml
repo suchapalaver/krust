@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bio = "*"
 custom_error = "1.9.2" 
-dashmap = "4.0.2"
+dashmap = "5.4.0"
 fxhash = "0.2.1"
 rayon = "*"
 
