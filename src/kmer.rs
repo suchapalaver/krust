@@ -3,7 +3,7 @@ custom_error::custom_error! { pub ValidityError
 }
 
 /// Creating a valid k-mer bytestring.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Kmer(pub Vec<u8>);
 
 /// Find the canonical kmer

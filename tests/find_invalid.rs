@@ -39,4 +39,3 @@ fn find_invalid_works5() {
     assert_eq!(0, ans);
     assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
 }
-
