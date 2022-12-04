@@ -25,10 +25,6 @@
 //! Returns k-mer counts for individual sequences in a fasta file.
 //! - Testing!
 
-pub mod bitpacked_kmer;
-pub mod configuration;
-pub mod dashmaps;
-pub mod kmer;
-pub mod revcomp_kmer;
+pub mod config;
+pub(crate) mod kmer;
 pub mod startup;
-pub mod unpacked_kmer;
