@@ -1,7 +1,7 @@
 use super::kmer::{Bitpack, Kmer, RevComp, Unpack};
-use bio::io::fasta;
 use dashmap::DashMap;
 use fxhash::FxHasher;
+use needletail::parse_fastx_file;
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -54,17 +54,16 @@ fn build_map<P: AsRef<Path> + std::fmt::Debug>(
 ) -> Result<DashFx, Box<dyn Error>> {
     let map: DashFx = DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default());
 
-    fasta::Reader::from_file(path)?
-        .records()
-        .into_iter()
-        .par_bridge()
-        .for_each(|r| {
-            let record = r.expect("Error reading fasta record.");
+    let mut reader = parse_fastx_file(path)?;
 
-            let seq: &[u8] = record.seq();
+    while let Some(record) = reader.next() {
+        let record = record.expect("invalid record");
 
-            process_seq(seq, &k, &map);
-        });
+        let seq = record.seq();
+
+        process_seq(&seq, &k, &map);
+
+    }
 
     Ok(map)
 }
