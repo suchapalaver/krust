@@ -11,12 +11,12 @@ impl Kmer {
         Self(Vec::new())
     }
 
-    fn add(&mut self, elem: Monomer) {
-        self.0.push(elem.into())
+    fn add(&mut self, elem: u8) {
+        self.0.push(elem)
     }
 
     pub(crate) fn from_sub(sub: &[u8]) -> Result<Self, ValidityError> {
-        sub.iter().map(|b| Monomer::parse(*b)).collect()
+        sub.iter().cloned().map(Monomer::parse).collect()
     }
 
     pub(crate) fn canonical(
@@ -41,7 +41,7 @@ impl FromIterator<u8> for Kmer {
         let mut k = Kmer::new();
 
         for i in iter {
-            k.add(i.into());
+            k.add(i);
         }
         k
     }
@@ -81,7 +81,7 @@ impl FromIterator<Monomer> for Kmer {
         let mut k = Self::new();
 
         for i in iter {
-            k.add(i);
+            k.add(i.into());
         }
         k
     }
