@@ -1,5 +1,6 @@
 use super::kmer::{Bitpack, Kmer, RevComp, Unpack};
 use bio::io::fasta;
+use bytes::Bytes;
 use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
@@ -30,7 +31,7 @@ pub fn run<P: AsRef<Path> + std::fmt::Debug>(path: P, k: usize) -> Result<(), Bo
         .par_bridge()
         .map(|(kmer, freq)| (Unpack::bit(kmer, k).0, freq))
         .map(|(kmer, freq)| {
-            let kmer = String::from_utf8(kmer).unwrap();
+            let kmer = String::from_utf8(kmer.to_vec()).unwrap();
             (kmer, freq)
         })
         .collect::<HashMap<String, i32>>()
@@ -61,9 +62,9 @@ fn build_map<P: AsRef<Path> + std::fmt::Debug>(
         .for_each(|r| {
             let record = r.expect("Error reading fasta record.");
 
-            let seq: &[u8] = record.seq();
+            let seq= Bytes::copy_from_slice(record.seq());
 
-            process_seq(seq, &k, &map);
+            process_seq(&seq, &k, &map);
         });
 
     Ok(map)
@@ -73,18 +74,18 @@ fn build_map<P: AsRef<Path> + std::fmt::Debug>(
 ///
 /// # Notes
 /// Canonicalizes by lexicographically smaller of k-mer/reverse-complement
-fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
+fn process_seq(seq: &Bytes, k: &usize, kmer_map: &DashFx) {
     let mut i = 0;
 
     while i <= seq.len() - k {
-        let sub = &seq[i..i + k];
+        let sub = seq.slice(i..i + k);
 
-        if let Ok(kmer) = Kmer::from_sub(sub) {
+        if let Ok(kmer) = Kmer::from_sub(&sub) {
             process_valid_bytes(kmer_map, kmer);
 
             i += 1;
         } else {
-            let invalid_byte_index = Kmer::find_invalid(sub);
+            let invalid_byte_index = Kmer::find_invalid(&sub);
 
             i += invalid_byte_index + 1;
         }
@@ -93,7 +94,7 @@ fn process_seq(seq: &[u8], k: &usize, kmer_map: &DashFx) {
 
 /// Convert a valid sequence substring from a bytes string to a u64
 fn process_valid_bytes(kmer_map: &DashFx, kmer: Kmer) {
-    let Bitpack(bitpacked_kmer) = kmer.0.iter().cloned().collect();
+    let Bitpack(bitpacked_kmer) = Bitpack::from(&kmer);
 
     // If the k-mer as found in the sequence is already a key in the `Dashmap`,
     // increment its value and move on
@@ -104,10 +105,10 @@ fn process_valid_bytes(kmer_map: &DashFx, kmer: Kmer) {
         let RevComp(revcompkmer) = RevComp::from_kmer(&kmer);
 
         // Find the alphabetically less of the k-mer substring and its reverse complement
-        let canonical_kmer = Kmer::canonical(revcompkmer, kmer.0);
+        let canonical_kmer = Kmer::canonical(&revcompkmer, &kmer.0);
 
         // Compress the canonical k-mer into a bitpacked 64-bit unsigned integer
-        let kmer: Bitpack = canonical_kmer.collect();
+        let kmer: Bitpack = Bitpack::from(canonical_kmer);
 
         // Add k-mer key and initial value to results
         *kmer_map.entry(kmer.0).or_insert(0) += 1;
