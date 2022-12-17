@@ -1,12 +1,11 @@
 use super::kmer::Kmer;
-use bio::io::fasta::Reader;
 use bytes::Bytes;
 use dashmap::DashMap;
 use fxhash::FxHasher;
+use needletail::{errors::ParseError, parse_fastx_file};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
-    error::Error,
     fmt::Debug,
     hash::BuildHasherDefault,
     io::{stdout, BufWriter, Error as IoError, Write},
@@ -14,7 +13,7 @@ use std::{
 };
 
 custom_error::custom_error! { pub ProcessError
-    ReadError{source: Box<dyn Error>} = "Unable to read input",
+    ReadError{source: ParseError} = "Unable to read input",
     WriteError{source: IoError} = "Unable to write output",
 }
 
@@ -35,7 +34,7 @@ type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
 trait KmerMap {
     fn new() -> Self;
-    fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, Box<dyn Error>>
+    fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, ProcessError>
     where
         Self: Sized;
     fn process_sequence(&self, seq: &Bytes, k: &usize);
@@ -53,7 +52,7 @@ impl KmerMap for DashFx {
     /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
     /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
     /// hashmap of canonical k-mers (keys) and their frequency in the data (values)
-    fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, Box<dyn Error>> {
+    fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, ProcessError> {
         for seq in sequence_reader(path)? {
             self.process_sequence(&seq, &k)
         }
@@ -147,13 +146,14 @@ impl KmerMap for DashFx {
 
 fn sequence_reader<P: AsRef<Path> + Debug>(
     path: P,
-) -> Result<impl Iterator<Item = Bytes>, Box<dyn Error>> {
-    Ok(Reader::from_file(path)?
-        .records()
-        .into_iter()
-        .par_bridge()
-        .map(|read| read.expect("Error reading fasta record."))
-        .map(|record| Bytes::copy_from_slice(record.seq()))
-        .collect::<Vec<Bytes>>()
-        .into_iter())
+) -> Result<impl Iterator<Item = Bytes>, ProcessError> {
+    let mut reader = parse_fastx_file(path)?;
+    let mut v = Vec::new();
+    while let Some(record) = reader.next() {
+        let record = record.expect("invalid record");
+        let seq = record.seq();
+        let seq = Bytes::copy_from_slice(&seq);
+        v.push(seq);
+    }
+    Ok(v.into_iter())
 }
