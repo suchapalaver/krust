@@ -7,9 +7,9 @@ use rayon::prelude::*;
 use std::{
     collections::HashMap,
     error::Error,
-    fmt::{Debug, Display},
+    fmt::Debug,
     hash::BuildHasherDefault,
-    io::{stdout, BufWriter, Error as IoError, Stdout, Write},
+    io::{stdout, BufWriter, Error as IoError, Write},
     path::Path,
 };
 
@@ -22,26 +22,7 @@ pub fn run<P>(path: P, k: usize) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
 {
-    let mut buf = BufWriter::new(stdout());
-
-    let map = DashFx::new();
-
-    for (kmer, count) in map
-        .build(path, k)?
-        .into_iter()
-        .par_bridge()
-        .map(|(kmer, freq)| (Unpack::bit(kmer, k).0, freq))
-        .map(|(kmer, freq)| {
-            let kmer = String::from_utf8(kmer.to_vec()).unwrap();
-            (kmer, freq)
-        })
-        .collect::<HashMap<String, i32>>()
-        .into_iter()
-    {
-        output(&mut buf, &kmer, count)?
-    }
-
-    buf.flush()?;
+    DashFx::new().build(path, k)?.output(k)?;
 
     Ok(())
 }
@@ -60,6 +41,7 @@ trait KmerMap {
     fn process_sequence(&self, seq: &Bytes, k: &usize);
     fn process_valid_bytes(&self, kmer: &Kmer);
     fn log(&self, kmer: u64);
+    fn output(self, k: usize) -> Result<(), ProcessError>;
 }
 
 impl KmerMap for DashFx {
@@ -72,13 +54,17 @@ impl KmerMap for DashFx {
     /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
     /// hashmap of canonical k-mers (keys) and their frequency in the data (values)
     fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, Box<dyn Error>> {
-        Reader::from_file(path)?.records().into_iter().par_bridge().for_each(|r| {
-            let record = r.expect("Error reading fasta record.");
+        Reader::from_file(path)?
+            .records()
+            .into_iter()
+            .par_bridge()
+            .for_each(|r| {
+                let record = r.expect("Error reading fasta record.");
 
-            let seq = Bytes::copy_from_slice(record.seq());
+                let seq = Bytes::copy_from_slice(record.seq());
 
-            self.process_sequence(&seq, &k);
-        });
+                self.process_sequence(&seq, &k);
+            });
 
         Ok(self)
     }
@@ -130,11 +116,26 @@ impl KmerMap for DashFx {
     fn log(&self, kmer: u64) {
         *self.entry(kmer).or_insert(0) += 1
     }
-}
 
-fn output<K>(buf: &mut BufWriter<Stdout>, kmer: K, count: i32) -> Result<(), IoError>
-where
-    K: AsRef<str> + Display,
-{
-    Ok(writeln!(buf, ">{}\n{}", count, kmer)?)
+    fn output(self, k: usize) -> Result<(), ProcessError> {
+        let mut buf = BufWriter::new(stdout());
+
+        for (kmer, count) in self
+            .into_iter()
+            .par_bridge()
+            .map(|(kmer, freq)| (Unpack::bit(kmer, k).0, freq))
+            .map(|(kmer, freq)| {
+                let kmer = String::from_utf8(kmer.to_vec()).unwrap();
+                (kmer, freq)
+            })
+            .collect::<HashMap<String, i32>>()
+            .into_iter()
+        {
+            writeln!(buf, ">{}\n{}", count, kmer)?
+        }
+
+        buf.flush()?;
+
+        Ok(())
+    }
 }
