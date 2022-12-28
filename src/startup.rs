@@ -1,4 +1,4 @@
-use super::kmer::{Bitpack, Kmer, RevComp, Unpack};
+use super::kmer::Kmer;
 use bio::io::fasta::Reader;
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -39,8 +39,8 @@ trait KmerMap {
     where
         Self: Sized;
     fn process_sequence(&self, seq: &Bytes, k: &usize);
-    fn process_valid_bytes(&self, kmer: &Kmer);
-    fn log(&self, kmer: u64);
+    fn process_valid_bytes(&self, kmer: &mut Kmer);
+    fn log(&self, kmer: &Kmer);
     fn output(self, k: usize) -> Result<(), ProcessError>;
 }
 
@@ -71,8 +71,8 @@ impl KmerMap for DashFx {
         while i <= seq.len() - k {
             let sub = seq.slice(i..i + k);
 
-            if let Ok(kmer) = Kmer::from_sub(&sub) {
-                self.process_valid_bytes(&kmer);
+            if let Ok(mut kmer) = Kmer::from_sub(&sub) {
+                self.process_valid_bytes(&mut kmer);
 
                 i += 1;
             } else {
@@ -84,29 +84,32 @@ impl KmerMap for DashFx {
     }
 
     /// Convert a valid sequence substring from a bytes string to a u64
-    fn process_valid_bytes(&self, kmer: &Kmer) {
-        let Bitpack(bitpacked_kmer) = Bitpack::from(kmer);
+    fn process_valid_bytes(&self, kmer: &mut Kmer) {
+        kmer.pack();
 
         // If the k-mer as found in the sequence is already a key in the `Dashmap`,
         // increment its value and move on
-        if let Some(mut freq) = self.get_mut(&bitpacked_kmer) {
+        if let Some(mut freq) = self.get_mut(&kmer.packed_bits) {
             *freq += 1;
         } else {
+            // Re-initialize packed bits
+            kmer.packed_bits = Default::default();
+
             // Initialize the reverse complement of this so-far unrecorded k-mer
-            let RevComp(revcompkmer) = RevComp::from_kmer(kmer);
+            kmer.reverse_complement();
 
             // Find the alphabetically less of the k-mer substring and its reverse complement
-            let canonical_kmer = Kmer::canonical(&revcompkmer, &kmer.0);
+            kmer.canonical();
 
-            // Compress the canonical k-mer into a bitpacked 64-bit unsigned integer
-            let kmer: Bitpack = Bitpack::from(canonical_kmer);
+            // Compress the canonical k-mer into a Kmered 64-bit unsigned integer
+            kmer.pack();
 
-            self.log(kmer.0);
+            self.log(kmer);
         }
     }
 
-    fn log(&self, kmer: u64) {
-        *self.entry(kmer).or_insert(0) += 1
+    fn log(&self, kmer: &Kmer) {
+        *self.entry(kmer.packed_bits).or_insert(0) += 1
     }
 
     fn output(self, k: usize) -> Result<(), ProcessError> {
@@ -115,7 +118,17 @@ impl KmerMap for DashFx {
         for (kmer, count) in self
             .into_iter()
             .par_bridge()
-            .map(|(kmer, freq)| (Unpack::bit(kmer, k).0, freq))
+            .map(|(kmer, freq)| Kmer {
+                bytes: Default::default(),
+                reverse_complement: Default::default(),
+                packed_bits: kmer,
+                count: freq,
+            })
+            .map(|mut kmer| {
+                kmer.unpack(k);
+                kmer
+            })
+            .map(|kmer| (kmer.bytes, kmer.count))
             .map(|(kmer, freq)| {
                 let kmer = String::from_utf8(kmer.to_vec()).unwrap();
                 (kmer, freq)
