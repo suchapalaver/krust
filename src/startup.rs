@@ -54,17 +54,9 @@ impl KmerMap for DashFx {
     /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
     /// hashmap of canonical k-mers (keys) and their frequency in the data (values)
     fn build<P: AsRef<Path> + Debug>(self, path: P, k: usize) -> Result<Self, Box<dyn Error>> {
-        Reader::from_file(path)?
-            .records()
-            .into_iter()
-            .par_bridge()
-            .for_each(|r| {
-                let record = r.expect("Error reading fasta record.");
-
-                let seq = Bytes::copy_from_slice(record.seq());
-
-                self.process_sequence(&seq, &k);
-            });
+        for seq in sequence_reader(path)? {
+            self.process_sequence(&seq, &k)
+        }
 
         Ok(self)
     }
@@ -138,4 +130,17 @@ impl KmerMap for DashFx {
 
         Ok(())
     }
+}
+
+fn sequence_reader<P: AsRef<Path> + Debug>(
+    path: P,
+) -> Result<impl Iterator<Item = Bytes>, Box<dyn Error>> {
+    Ok(Reader::from_file(path)?
+        .records()
+        .into_iter()
+        .par_bridge()
+        .map(|read| read.expect("Error reading fasta record."))
+        .map(|record| Bytes::copy_from_slice(record.seq()))
+        .collect::<Vec<Bytes>>()
+        .into_iter())
 }
