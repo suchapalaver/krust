@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use bytes::Bytes;
 
 custom_error::custom_error! { pub ValidityError
@@ -13,12 +15,9 @@ impl Kmer {
         sub.iter().map(|b| Monomer::try_from(*b)).collect()
     }
 
-    pub(crate) fn canonical<'a>(
-        reverse_complement: &'a Bytes,
-        kmer: &'a Bytes,
-    ) -> &'a Bytes {
+    pub(crate) fn canonical<'a>(reverse_complement: &'a Bytes, kmer: &'a Bytes) -> &'a Bytes {
         match reverse_complement.cmp(kmer) {
-            std::cmp::Ordering::Less => reverse_complement,
+            Ordering::Less => reverse_complement,
             _ => kmer,
         }
     }
@@ -78,14 +77,13 @@ impl From<u64> for Monomer {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<u64> for Monomer {
-    fn into(self) -> u64 {
-        match self {
-            Self::A => 0,
-            Self::C => 1,
-            Self::G => 2,
-            Self::T => 3,
+impl From<Monomer> for u64 {
+    fn from(m: Monomer) -> u64 {
+        match m {
+            Monomer::A => 0,
+            Monomer::C => 1,
+            Monomer::G => 2,
+            Monomer::T => 3,
         }
     }
 }
@@ -139,7 +137,7 @@ pub(crate) struct Bitpack(pub u64);
 
 impl Bitpack {
     fn new() -> Self {
-        Self(0)
+        Self(Default::default())
     }
 
     fn pack(&mut self, elem: &u8) {
@@ -156,9 +154,7 @@ impl Bitpack {
 impl From<&Bytes> for Bitpack {
     fn from(bytes: &Bytes) -> Self {
         let mut packed = Self::new();
-        bytes.iter().for_each(|b| {
-            packed.pack(b)
-        });
+        bytes.iter().for_each(|b| packed.pack(b));
         packed
     }
 }
@@ -166,9 +162,7 @@ impl From<&Bytes> for Bitpack {
 impl From<&Kmer> for Bitpack {
     fn from(kmer: &Kmer) -> Self {
         let mut packed = Self::new();
-        kmer.bytes().iter().for_each(|b| {
-            packed.pack(b)
-        });
+        kmer.bytes().iter().for_each(|b| packed.pack(b));
         packed
     }
 }

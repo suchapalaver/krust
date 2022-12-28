@@ -18,7 +18,7 @@ impl Config {
         };
 
         let path = match args.next() {
-            Some(arg) => PathBuf::from(arg),
+            Some(arg) => arg.into(),
             None => return Err("filepath argument needed".into()),
         };
 
