@@ -4,6 +4,7 @@ use std::{env, error::Error, path::PathBuf};
 pub struct Config {
     pub k: usize,
     pub path: PathBuf,
+    pub reader: bool,
 }
 
 impl Config {
@@ -22,6 +23,8 @@ impl Config {
             None => return Err("filepath argument needed".into()),
         };
 
-        Ok(Config { k, path })
+        let reader = args.next().is_some();
+
+        Ok(Config { k, path, reader })
     }
 }
