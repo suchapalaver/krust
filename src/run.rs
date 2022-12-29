@@ -5,7 +5,7 @@ use super::{
 use bytes::Bytes;
 use dashmap::DashMap;
 use fxhash::FxHasher;
-use rayon::prelude::*;
+use rayon::prelude::{ParallelBridge, ParallelIterator};
 use std::{
     collections::{hash_map::IntoIter, HashMap},
     error::Error,
