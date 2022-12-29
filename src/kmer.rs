@@ -29,7 +29,7 @@ impl Kmer {
     pub(crate) fn pack(&mut self) {
         let iter = match self.bytes.is_empty() {
             true => &self.reverse_complement,
-            false => &self.bytes
+            false => &self.bytes,
         };
         for elem in iter.iter() {
             self.packed_bits <<= 2;

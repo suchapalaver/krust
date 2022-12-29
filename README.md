@@ -24,4 +24,16 @@ cargo run --release 21 your/local/path/to/fasta_data.fa > output.tsv
 ...
 ```  
 
-`krust` uses [`rust-bio`](https://docs.rs/bio/0.38.0/bio/), [`rayon`](https://docs.rs/rayon/1.5.1/rayon/), and [`dashmap`](https://docs.rs/crate/dashmap/4.0.2).  
+`krust` roughly supports either `rust-bio` or `needletail` fasta reading, requiring users to edit the following line in `startup`:
+
+For `needletail`:
+
+```rust
+.build(Needletail::sequence_reader(path)?, k)?
+```
+
+For `rust-bio`:
+
+```rust
+.build(RustBio::sequence_reader(path)?, k)?
+```
