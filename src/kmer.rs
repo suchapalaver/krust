@@ -27,10 +27,9 @@ impl Kmer {
     }
 
     pub(crate) fn pack(&mut self) {
-        let iter = if self.bytes.is_empty() {
-            &self.reverse_complement
-        } else {
-            &self.bytes
+        let iter = match self.bytes.is_empty() {
+            true => &self.reverse_complement,
+            false => &self.bytes
         };
         for elem in iter.iter() {
             self.packed_bits <<= 2;
