@@ -10,7 +10,7 @@ custom_error::custom_error! { pub ValidityError
 #[derive(Debug, Default, Eq, PartialEq, Hash)]
 pub(crate) struct Kmer {
     pub(crate) bytes: Bytes,
-    pub(crate) reverse_complement: Bytes,
+    pub(crate) reverse_complement: bool,
     pub(crate) packed_bits: u64,
     pub(crate) count: i32,
 }
@@ -27,31 +27,27 @@ impl Kmer {
     }
 
     pub(crate) fn pack(&mut self) {
-        let iter = match self.bytes.is_empty() {
-            true => &self.reverse_complement,
-            false => &self.bytes,
-        };
-        for elem in iter.iter() {
+        for elem in self.bytes.iter() {
             self.packed_bits <<= 2;
             let mask: u64 = Monomer::from_u8(elem).into();
             self.packed_bits |= mask
         }
     }
 
-    pub(crate) fn reverse_complement(&mut self) {
-        self.reverse_complement = self
+    pub(crate) fn canonical(&mut self) {
+        match self
             .bytes
             .iter()
             .rev()
             .map(|byte| Monomer::from_u8(byte).complement().into_u8())
-            .collect();
-    }
-
-    pub(crate) fn clear_non_canonical(&mut self) {
-        match self.reverse_complement.cmp(&self.bytes) {
-            Ordering::Less => self.bytes.clear(),
-            _ => self.reverse_complement.clear(),
-        };
+            .collect::<Bytes>()
+        {
+            reverse_complement if reverse_complement.cmp(&self.bytes) == Ordering::Less => {
+                self.bytes = reverse_complement;
+                self.reverse_complement = true
+            }
+            _ => (),
+        }
     }
 
     pub(crate) fn unpack(&mut self, k: usize) {

@@ -26,14 +26,12 @@ where
 {
     let (reader, name) = match reader {
         true => (Needletail::sequence_reader(path), "needletail"),
-        false => (RustBio::sequence_reader(path), "rust-bio")
+        false => (RustBio::sequence_reader(path), "rust-bio"),
     };
-   
+
     println!("\nReading fasta with {} ...", name);
 
-    DashFx::new()
-            .build(reader?, k)?
-            .output(k)?;
+    DashFx::new().build(reader?, k)?.output(k)?;
 
     Ok(())
 }
@@ -111,17 +109,14 @@ impl KmerMap for DashFx {
         if let Some(mut count) = self.get_mut(&kmer.packed_bits) {
             *count += 1;
         } else {
-            // Re-initialize packed bits
-            kmer.packed_bits = Default::default();
+            kmer.canonical();
 
-            // Initialize the reverse complement of this so-far unrecorded k-mer
-            kmer.reverse_complement();
-
-            // Find the alphabetically less of the k-mer substring and its reverse complement
-            kmer.clear_non_canonical();
-
-            // Compress the canonical k-mer into a Kmered 64-bit unsigned integer
-            kmer.pack();
+            if kmer.reverse_complement {
+                // Re-initialize packed bits
+                kmer.packed_bits = Default::default();
+                // Compress the canonical k-mer into a 64-bit unsigned integer
+                kmer.pack();
+            }
 
             self.log(kmer);
         }
