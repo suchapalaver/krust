@@ -44,7 +44,7 @@ trait KmerMap {
     fn new() -> Self;
     fn build(
         self,
-        sequences: impl Iterator<Item = Bytes>,
+        sequences: rayon::vec::IntoIter<Bytes>,
         k: usize,
     ) -> Result<Self, Box<dyn Error>>
     where
@@ -67,13 +67,13 @@ impl KmerMap for DashFx {
     /// hashmap of canonical k-mers (keys) and their frequency in the data (values)
     fn build(
         self,
-        sequences: impl Iterator<Item = Bytes>,
+        sequences: rayon::vec::IntoIter<Bytes>,
         k: usize,
     ) -> Result<Self, Box<dyn Error>> {
-        for seq in sequences {
+        sequences.for_each(|seq| {
             self.process_sequence(&seq, &k)
-        }
-
+        });
+        
         Ok(self)
     }
 

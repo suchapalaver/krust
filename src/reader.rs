@@ -1,9 +1,9 @@
-use std::{error::Error, fmt::Debug, path::Path, vec::IntoIter};
+use std::{error::Error, fmt::Debug, path::Path};
 
 use bio::io::fasta::Reader;
 use bytes::Bytes;
 use needletail::parse_fastx_file;
-use rayon::prelude::{ParallelBridge, ParallelIterator};
+use rayon::{prelude::{ParallelBridge, ParallelIterator, IntoParallelIterator}, vec::IntoIter};
 
 pub(crate) trait SequenceReader {
     fn sequence_reader<P: AsRef<Path> + Debug>(path: P) -> Result<IntoIter<Bytes>, Box<dyn Error>>;
@@ -20,7 +20,7 @@ impl SequenceReader for RustBio {
             .map(|read| read.expect("Error reading fasta record."))
             .map(|record| Bytes::copy_from_slice(record.seq()))
             .collect::<Vec<Bytes>>()
-            .into_iter())
+            .into_par_iter())
     }
 }
 
@@ -36,6 +36,6 @@ impl SequenceReader for Needletail {
             let seq = Bytes::copy_from_slice(&seq);
             v.push(seq);
         }
-        Ok(v.into_iter())
+        Ok(v.into_par_iter())
     }
 }
