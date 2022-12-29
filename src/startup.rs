@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
 use std::{
-    collections::{HashMap, hash_map::IntoIter},
+    collections::{hash_map::IntoIter, HashMap},
     error::Error,
     fmt::Debug,
     hash::BuildHasherDefault,
@@ -89,15 +89,14 @@ impl KmerMap for DashFx {
         while i <= seq.len() - k {
             let sub = seq.slice(i..i + k);
 
-            if let Ok(mut kmer) = Kmer::from_sub(&sub) {
-                self.process_valid_bytes(&mut kmer);
-
-                i += 1;
-            } else {
-                let invalid_byte_index = Kmer::find_invalid(&sub);
-
-                i += invalid_byte_index + 1;
+            match Kmer::from_sub(&sub) {
+                Ok(mut kmer) => {
+                    self.process_valid_bytes(&mut kmer)
+                }
+                Err(invalid_byte_index) => i += invalid_byte_index,
             }
+
+            i += 1
         }
     }
 
@@ -130,8 +129,7 @@ impl KmerMap for DashFx {
     fn output(self, k: usize) -> Result<(), ProcessError> {
         let mut buf = BufWriter::new(stdout());
 
-        for (kmer, count) in self.stream(k)
-        {
+        for (kmer, count) in self.stream(k) {
             writeln!(buf, ">{}\n{}", count, kmer)?
         }
 
@@ -141,8 +139,7 @@ impl KmerMap for DashFx {
     }
 
     fn stream(self, k: usize) -> IntoIter<String, i32> {
-        self
-            .into_iter()
+        self.into_iter()
             .par_bridge()
             .map(|(packed_bits, count)| Kmer {
                 packed_bits,
