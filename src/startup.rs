@@ -89,8 +89,8 @@ impl KmerMap for DashFx {
 
         // If the k-mer as found in the sequence is already a key in the `Dashmap`,
         // increment its value and move on
-        if let Some(mut freq) = self.get_mut(&kmer.packed_bits) {
-            *freq += 1;
+        if let Some(mut count) = self.get_mut(&kmer.packed_bits) {
+            *count += 1;
         } else {
             // Re-initialize packed bits
             kmer.packed_bits = Default::default();
@@ -99,7 +99,7 @@ impl KmerMap for DashFx {
             kmer.reverse_complement();
 
             // Find the alphabetically less of the k-mer substring and its reverse complement
-            kmer.canonical();
+            kmer.clear_non_canonical();
 
             // Compress the canonical k-mer into a Kmered 64-bit unsigned integer
             kmer.pack();
@@ -118,20 +118,19 @@ impl KmerMap for DashFx {
         for (kmer, count) in self
             .into_iter()
             .par_bridge()
-            .map(|(kmer, freq)| Kmer {
-                bytes: Default::default(),
-                reverse_complement: Default::default(),
-                packed_bits: kmer,
-                count: freq,
+            .map(|(packed_bits, count)| Kmer {
+                packed_bits,
+                count,
+                ..Default::default()
             })
             .map(|mut kmer| {
                 kmer.unpack(k);
                 kmer
             })
             .map(|kmer| (kmer.bytes, kmer.count))
-            .map(|(kmer, freq)| {
+            .map(|(kmer, count)| {
                 let kmer = String::from_utf8(kmer.to_vec()).unwrap();
-                (kmer, freq)
+                (kmer, count)
             })
             .collect::<HashMap<String, i32>>()
             .into_iter()

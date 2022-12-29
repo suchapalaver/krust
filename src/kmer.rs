@@ -17,12 +17,12 @@ pub(crate) struct Kmer {
 
 impl Kmer {
     pub(crate) fn from_sub(sub: &Bytes) -> Result<Self, ValidityError> {
-        sub.iter().map(|b| Monomer::try_from(*b)).collect()
+        sub.iter().map(Monomer::try_from).collect()
     }
 
     pub(crate) fn find_invalid(sub: &Bytes) -> usize {
         sub.iter()
-            .rposition(|b| Monomer::try_from(*b).is_err())
+            .rposition(|b| Monomer::try_from(b).is_err())
             .unwrap()
     }
 
@@ -33,7 +33,7 @@ impl Kmer {
         };
         for elem in iter.iter() {
             self.packed_bits <<= 2;
-            let mask: u64 = Monomer::from_u8(*elem).into();
+            let mask: u64 = Monomer::from_u8(elem).into();
             self.packed_bits |= mask
         }
     }
@@ -43,11 +43,11 @@ impl Kmer {
             .bytes
             .iter()
             .rev()
-            .map(|byte| Monomer::from_u8(*byte).complement().into_u8())
+            .map(|byte| Monomer::from_u8(byte).complement().into_u8())
             .collect();
     }
 
-    pub(crate) fn canonical(&mut self) {
+    pub(crate) fn clear_non_canonical(&mut self) {
         match self.reverse_complement.cmp(&self.bytes) {
             Ordering::Less => self.bytes.clear(),
             _ => self.reverse_complement.clear(),
@@ -57,8 +57,7 @@ impl Kmer {
     pub(crate) fn unpack(&mut self, k: usize) {
         self.bytes = (0..k)
             .into_iter()
-            .map(|i| self.packed_bits.isolate(i, k))
-            .map(|bit| bit.replace())
+            .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
             .map(Monomer::from)
             .map(|m| m.into_u8())
             .collect()
@@ -81,10 +80,10 @@ pub(crate) enum Monomer {
     T,
 }
 
-impl TryFrom<u8> for Monomer {
+impl TryFrom<&u8> for Monomer {
     type Error = ValidityError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: &u8) -> Result<Self, Self::Error> {
         match value {
             b'A' => Ok(Self::A),
             b'C' => Ok(Self::C),
@@ -127,7 +126,7 @@ impl Monomer {
         }
     }
 
-    fn from_u8(byte: u8) -> Self {
+    fn from_u8(byte: &u8) -> Self {
         match byte {
             b'A' => Self::A,
             b'C' => Self::C,
@@ -146,21 +145,6 @@ impl Monomer {
     }
 }
 
-trait Pack {
-    fn isolate(self, i: usize, k: usize) -> Self;
-    fn replace(self) -> Self;
-}
-
-impl Pack for u64 {
-    fn isolate(self, i: usize, k: usize) -> Self {
-        self << ((i * 2) + 64 - (k * 2))
-    }
-
-    fn replace(self) -> Self {
-        self >> 62
-    }
-}
-
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -175,7 +159,7 @@ pub mod test {
     #[test]
     fn test_parse_valid_byte() {
         let b = b'N';
-        assert!(Monomer::try_from(b).is_err());
+        assert!(Monomer::try_from(&b).is_err());
     }
 
     #[test]
