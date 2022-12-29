@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use fxhash::FxHasher;
 use rayon::prelude::*;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::IntoIter},
     error::Error,
     fmt::Debug,
     hash::BuildHasherDefault,
@@ -55,6 +55,7 @@ trait KmerMap {
     fn process_valid_bytes(&self, kmer: &mut Kmer);
     fn log(&self, kmer: &Kmer);
     fn output(self, k: usize) -> Result<(), ProcessError>;
+    fn stream(self, k: usize) -> IntoIter<String, i32>;
 }
 
 impl KmerMap for DashFx {
@@ -129,7 +130,18 @@ impl KmerMap for DashFx {
     fn output(self, k: usize) -> Result<(), ProcessError> {
         let mut buf = BufWriter::new(stdout());
 
-        for (kmer, count) in self
+        for (kmer, count) in self.stream(k)
+        {
+            writeln!(buf, ">{}\n{}", count, kmer)?
+        }
+
+        buf.flush()?;
+
+        Ok(())
+    }
+
+    fn stream(self, k: usize) -> IntoIter<String, i32> {
+        self
             .into_iter()
             .par_bridge()
             .map(|(packed_bits, count)| Kmer {
@@ -148,12 +160,5 @@ impl KmerMap for DashFx {
             })
             .collect::<HashMap<String, i32>>()
             .into_iter()
-        {
-            writeln!(buf, ">{}\n{}", count, kmer)?
-        }
-
-        buf.flush()?;
-
-        Ok(())
     }
 }
