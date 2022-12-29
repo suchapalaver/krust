@@ -24,12 +24,10 @@ pub fn run<P>(path: P, k: usize, reader: bool) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
 {
-    let (reader, name) = match reader {
-        true => (Needletail::sequence_reader(path), "needletail"),
-        false => (RustBio::sequence_reader(path), "rust-bio"),
+    let reader = match reader {
+        true => Needletail::sequence_reader(path),
+        false => RustBio::sequence_reader(path),
     };
-
-    println!("\nReading fasta with {} ...", name);
 
     DashFx::new().build(reader?, k)?.output(k)?;
 
@@ -90,9 +88,7 @@ impl KmerMap for DashFx {
             let sub = seq.slice(i..i + k);
 
             match Kmer::from_sub(&sub) {
-                Ok(mut kmer) => {
-                    self.process_valid_bytes(&mut kmer)
-                }
+                Ok(mut kmer) => self.process_valid_bytes(&mut kmer),
                 Err(invalid_byte_index) => i += invalid_byte_index,
             }
 
