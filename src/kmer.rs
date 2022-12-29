@@ -16,14 +16,16 @@ pub(crate) struct Kmer {
 }
 
 impl Kmer {
-    pub(crate) fn from_sub(sub: &Bytes) -> Result<Self, ValidityError> {
-        sub.iter().map(Monomer::try_from).collect()
-    }
-
-    pub(crate) fn find_invalid(sub: &Bytes) -> usize {
+    pub(crate) fn from_sub(sub: &Bytes) -> Result<Self, usize> {
         sub.iter()
-            .rposition(|b| Monomer::try_from(b).is_err())
-            .unwrap()
+            .enumerate()
+            .map(|x| {
+                Ok(match Monomer::try_from(x) {
+                    Ok(b) => b,
+                    Err(i) => return Err(i),
+                })
+            })
+            .collect()
     }
 
     pub(crate) fn pack(&mut self) {
@@ -76,16 +78,16 @@ pub(crate) enum Monomer {
     T,
 }
 
-impl TryFrom<&u8> for Monomer {
-    type Error = ValidityError;
+impl TryFrom<(usize, &u8)> for Monomer {
+    type Error = usize;
 
-    fn try_from(value: &u8) -> Result<Self, Self::Error> {
+    fn try_from(value: (usize, &u8)) -> Result<Self, Self::Error> {
         match value {
-            b'A' => Ok(Self::A),
-            b'C' => Ok(Self::C),
-            b'G' => Ok(Self::G),
-            b'T' => Ok(Self::T),
-            _ => Err(ValidityError::InvalidByte),
+            (_, b'A') => Ok(Self::A),
+            (_, b'C') => Ok(Self::C),
+            (_, b'G') => Ok(Self::G),
+            (_, b'T') => Ok(Self::T),
+            (invalid_byte_index, _) => Err(invalid_byte_index),
         }
     }
 }
@@ -146,16 +148,17 @@ pub mod test {
     use super::*;
 
     #[test]
-    fn test_from_valid_substring() {
+    fn bytes_from_valid_substring() {
         let sub = &[b'G', b'A', b'T', b'T', b'A', b'C', b'A'];
         let k = Kmer::from_sub(&Bytes::copy_from_slice(sub)).unwrap();
         insta::assert_snapshot!(format!("{:?}", k.bytes), @r###"b"GATTACA""###);
     }
 
     #[test]
-    fn test_parse_valid_byte() {
+    fn error_on_invalid_byte() {
+        let enumeration = 0;
         let b = b'N';
-        assert!(Monomer::try_from(&b).is_err());
+        assert!(Monomer::try_from((enumeration, &b)).is_err());
     }
 
     #[test]
@@ -166,30 +169,25 @@ pub mod test {
     }
 
     #[test]
-    fn find_invalid_works() {
+    fn from_sub_finds_invalid_byte_index() {
         let dna = "NACNN".as_bytes();
-        let ans = Kmer::find_invalid(&Bytes::copy_from_slice(dna));
-        assert_eq!(4, ans);
-        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(0), ans);
 
-        let dna = "NACNG".as_bytes();
-        let ans = Kmer::find_invalid(&Bytes::copy_from_slice(dna));
-        assert_eq!(3, ans);
-        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        let dna = "ANCNG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(1), ans);
 
-        let dna = "NANTG".as_bytes();
-        let ans = Kmer::find_invalid(&Bytes::copy_from_slice(dna));
-        assert_eq!(2, ans);
-        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        let dna = "AANTG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(2), ans);
 
-        let dna = "NNCTG".as_bytes();
-        let ans = Kmer::find_invalid(&Bytes::copy_from_slice(dna));
-        assert_eq!(1, ans);
-        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        let dna = "CCCNG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(3), ans);
 
-        let dna = "NACTG".as_bytes();
-        let ans = Kmer::find_invalid(&Bytes::copy_from_slice(dna));
-        assert_eq!(0, ans);
-        assert_eq!(&b'N', dna.iter().collect::<Vec<_>>()[ans]);
+        let dna = "AACTN".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(4), ans);
     }
 }
