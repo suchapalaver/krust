@@ -27,5 +27,5 @@
 
 pub mod config;
 pub(crate) mod kmer;
-pub mod startup;
 pub(crate) mod reader;
+pub mod startup;

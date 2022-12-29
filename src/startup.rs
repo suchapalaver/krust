@@ -1,4 +1,7 @@
-use super::{kmer::Kmer, reader::{RustBio, SequenceReader}};
+use super::{
+    kmer::Kmer,
+    reader::{Needletail, RustBio, SequenceReader},
+};
 use bytes::Bytes;
 use dashmap::DashMap;
 use fxhash::FxHasher;
@@ -21,7 +24,9 @@ pub fn run<P>(path: P, k: usize) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
 {
-    DashFx::new().build(RustBio::sequence_reader(path)?, k)?.output(k)?;
+    DashFx::new()
+        .build(Needletail::sequence_reader(path)?, k)?
+        .output(k)?;
 
     Ok(())
 }
@@ -34,7 +39,11 @@ type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
 trait KmerMap {
     fn new() -> Self;
-    fn build(self, sequences: impl Iterator<Item = Bytes>, k: usize) -> Result<Self, Box<dyn Error>>
+    fn build(
+        self,
+        sequences: impl Iterator<Item = Bytes>,
+        k: usize,
+    ) -> Result<Self, Box<dyn Error>>
     where
         Self: Sized;
     fn process_sequence(&self, seq: &Bytes, k: &usize);
@@ -52,7 +61,11 @@ impl KmerMap for DashFx {
     /// using a customized [`dashmap`](https://docs.rs/dashmap/4.0.2/dashmap/struct.DashMap.html)
     /// with [`FxHasher`](https://docs.rs/fxhash/0.2.1/fxhash/struct.FxHasher.html) to update in parallel a
     /// hashmap of canonical k-mers (keys) and their frequency in the data (values)
-    fn build(self, sequences: impl Iterator<Item = Bytes>, k: usize) -> Result<Self, Box<dyn Error>> {
+    fn build(
+        self,
+        sequences: impl Iterator<Item = Bytes>,
+        k: usize,
+    ) -> Result<Self, Box<dyn Error>> {
         for seq in sequences {
             self.process_sequence(&seq, &k)
         }
