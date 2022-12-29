@@ -8,7 +8,7 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(e) = startup::run(config.path, config.k) {
+    if let Err(e) = startup::run(config.path, config.k, config.reader) {
         eprintln!("Application error: {}", e);
         drop(e);
         process::exit(1);

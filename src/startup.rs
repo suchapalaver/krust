@@ -20,13 +20,20 @@ custom_error::custom_error! { pub ProcessError
     WriteError{source: IoError} = "Unable to write output",
 }
 
-pub fn run<P>(path: P, k: usize) -> Result<(), ProcessError>
+pub fn run<P>(path: P, k: usize, reader: bool) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
 {
+    let (reader, name) = match reader {
+        true => (Needletail::sequence_reader(path), "needletail"),
+        false => (RustBio::sequence_reader(path), "rust-bio")
+    };
+   
+    println!("\nReading fasta with {} ...", name);
+
     DashFx::new()
-        .build(Needletail::sequence_reader(path)?, k)?
-        .output(k)?;
+            .build(reader?, k)?
+            .output(k)?;
 
     Ok(())
 }
