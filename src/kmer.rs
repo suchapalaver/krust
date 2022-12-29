@@ -57,13 +57,8 @@ impl Kmer {
     pub(crate) fn unpack(&mut self, k: usize) {
         self.bytes = (0..k)
             .into_iter()
-            .map(|i| {
-                self.packed_bits.isolate(i, k);
-                self.packed_bits.replace();
-                Monomer::from(&self.packed_bits)
-            })
-            // .map(|bit| bit.replace())
-            // .map(|x| Monomer::from(&x))
+            .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
+            .map(Monomer::from)
             .map(|m| m.into_u8())
             .collect()
     }
@@ -99,8 +94,8 @@ impl TryFrom<&u8> for Monomer {
     }
 }
 
-impl From<&u64> for Monomer {
-    fn from(u: &u64) -> Self {
+impl From<u64> for Monomer {
+    fn from(u: u64) -> Self {
         match u {
             0 => Self::A,
             1 => Self::C,
@@ -147,21 +142,6 @@ impl Monomer {
             Self::G => b'G',
             Self::T => b'T',
         }
-    }
-}
-
-trait Pack {
-    fn isolate(&mut self, i: usize, k: usize);
-    fn replace(&mut self);
-}
-
-impl Pack for u64 {
-    fn isolate(&mut self, i: usize, k: usize) {
-        *self << ((i * 2) + 64 - (k * 2));
-    }
-
-    fn replace(&mut self) {
-        *self >> 62;
     }
 }
 
