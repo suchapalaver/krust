@@ -2,16 +2,11 @@ use std::cmp::Ordering;
 
 use bytes::Bytes;
 
-custom_error::custom_error! { pub ValidityError
-    InvalidByte = "not a valid byte",
-}
-
-/// Compressing k-mers of length `0 < k < 33`, Kmering them into unsigned integers
 #[derive(Debug, Default, Eq, PartialEq, Hash)]
 pub(crate) struct Kmer {
     pub(crate) bytes: Bytes,
-    pub(crate) reverse_complement: bool,
     pub(crate) packed_bits: u64,
+    pub(crate) reverse_complement: bool,
     pub(crate) count: i32,
 }
 

@@ -1,6 +1,5 @@
-use std::{env, error::Error, path::PathBuf};
+use std::{error::Error, path::PathBuf, fs};
 
-/// Parsing command line k-size and filepath arguments
 pub struct Config {
     pub k: usize,
     pub path: PathBuf,
@@ -8,22 +7,23 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(mut args: env::Args) -> Result<Config, Box<dyn Error>> {
-        let k: usize = match args.nth(1) {
-            Some(arg) => match arg.parse() {
-                Ok(k) if k > 0 && k < 33 => k,
-                Ok(_) => return Err("k-mer length needs to be larger than zero and, for `krust` in its current working form, no more than 32".into()),
-                Err(_) => return Err(format!("issue with k-mer length argument: {}", arg).into()),
-            },
-            None => return Err("k-mer length input required".into()),
+    pub fn new(k: &str, path: &str, reader: &str) -> Result<Config, Box<dyn Error>> {
+        let k: usize = match k.parse::<usize>() {
+            Ok(k) if k > 0 && k < 33 => k,
+            Ok(_) => return Err("k-mer length needs to be larger than zero and, for krust currently, no more than 32".into()),
+            Err(_) => return Err(format!("Issue with k-mer length argument \"{}\"", k).into()),
         };
 
-        let path = match args.next() {
-            Some(arg) => arg.into(),
-            None => return Err("filepath argument needed".into()),
+        let path = match fs::metadata(path) {
+            Ok(_) => path.into(),
+            Err(e) => return Err(format!("Issue with file path: {}", e).into()),
         };
 
-        let reader = args.next().is_some();
+        let reader = match reader {
+            reader if matches!(reader, "needletail") => true,
+            reader if matches!(reader, "rust-bio") => true,
+            _ => return Err(format!("Invalid reader argument: \"{}\"", reader).into()),
+        };
 
         Ok(Config { k, path, reader })
     }
