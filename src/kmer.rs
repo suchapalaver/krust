@@ -148,16 +148,17 @@ pub mod test {
     use super::*;
 
     #[test]
-    fn test_from_valid_substring() {
+    fn bytes_from_valid_substring() {
         let sub = &[b'G', b'A', b'T', b'T', b'A', b'C', b'A'];
         let k = Kmer::from_sub(&Bytes::copy_from_slice(sub)).unwrap();
         insta::assert_snapshot!(format!("{:?}", k.bytes), @r###"b"GATTACA""###);
     }
 
     #[test]
-    fn test_parse_valid_byte() {
+    fn error_on_invalid_byte() {
+        let enumeration = 0;
         let b = b'N';
-        assert!(Monomer::try_from((0, &b)).is_err());
+        assert!(Monomer::try_from((enumeration, &b)).is_err());
     }
 
     #[test]
@@ -165,5 +166,28 @@ pub mod test {
         let sub = &[b'N'];
         let k = Kmer::from_sub(&Bytes::copy_from_slice(sub));
         assert!(k.is_err());
+    }
+
+    #[test]
+    fn from_sub_finds_invalid_byte_index() {
+        let dna = "NACNN".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(0), ans);
+
+        let dna = "ANCNG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(1), ans);
+
+        let dna = "AANTG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(2), ans);
+
+        let dna = "CCCNG".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(3), ans);
+
+        let dna = "AACTN".as_bytes();
+        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        assert_eq!(Err(4), ans);
     }
 }
