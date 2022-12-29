@@ -1,6 +1,6 @@
 use std::process;
 
-use krust::{config::Config, startup};
+use krust::{config::Config, run};
 
 use clap::{Arg, Command};
 
@@ -44,7 +44,7 @@ fn main() {
     println!("using {} reader", reader);
     println!();
 
-    if let Err(e) = startup::run(config.path, config.k, config.reader) {
+    if let Err(e) = run::run(config.path, config.k, config.reader) {
         eprintln!("Application error: {}", e);
         drop(e);
         process::exit(1);

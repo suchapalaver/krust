@@ -28,4 +28,4 @@
 pub mod config;
 pub(crate) mod kmer;
 pub(crate) mod reader;
-pub mod startup;
+pub mod run;
