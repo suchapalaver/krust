@@ -99,7 +99,7 @@ impl KmerMap for DashFx {
             kmer.reverse_complement();
 
             // Find the alphabetically less of the k-mer substring and its reverse complement
-            kmer.canonical();
+            kmer.clear_non_canonical();
 
             // Compress the canonical k-mer into a Kmered 64-bit unsigned integer
             kmer.pack();
