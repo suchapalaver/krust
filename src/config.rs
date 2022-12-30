@@ -1,5 +1,7 @@
 use std::{error::Error, path::PathBuf, fs};
 
+use colored::Colorize;
+
 pub struct Config {
     pub k: usize,
     pub path: PathBuf,
@@ -11,18 +13,18 @@ impl Config {
         let k: usize = match k.parse::<usize>() {
             Ok(k) if k > 0 && k < 33 => k,
             Ok(_) => return Err("k-mer length needs to be larger than zero and, for krust currently, no more than 32".into()),
-            Err(_) => return Err(format!("Issue with k-mer length argument \"{}\"", k).into()),
+            Err(_) => return Err(format!("Issue with k-mer length argument \"{}\"", k.bold()).into()),
         };
 
         let path = match fs::metadata(path) {
             Ok(_) => path.into(),
-            Err(e) => return Err(format!("Issue with file path: {}", e).into()),
+            Err(e) => return Err(format!("Issue with file path: {}", e.to_string().bold()).into()),
         };
 
         let reader = match reader {
             reader if matches!(reader, "needletail") => true,
             reader if matches!(reader, "rust-bio") => true,
-            _ => return Err(format!("Invalid reader argument: \"{}\"", reader).into()),
+            _ => return Err(format!("Invalid reader argument: \"{}\"", reader.bold()).into()),
         };
 
         Ok(Config { k, path, reader })

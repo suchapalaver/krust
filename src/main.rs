@@ -1,5 +1,6 @@
 use std::process;
 
+use colored::Colorize;
 use krust::{config::Config, run};
 
 use clap::{Arg, Command};
@@ -34,18 +35,20 @@ fn main() {
     println!();
 
     let config = Config::new(k, path, reader).unwrap_or_else(|e| {
-        eprintln!("Problem parsing arguments: {}", e);
-        eprintln!("\nFor help menu:\n\n    cargo run -- --help\nor:\n    krust --help\n");
+        eprintln!("{}\n {}", "Problem parsing arguments:".red().bold(), e.to_string().red());
+        eprintln!();
+        eprintln!("{}\n {}\n  {}\n   {}", "Help menu:".green().bold(), "$ cargo run -- --help".bold(), "or".underline(), "$ krust --help".bold());
+        eprintln!();
         process::exit(1);
     });
 
-    println!("counting {}-mers", k);
-    println!("in {}", path);
-    println!("using {} reader", reader);
+    println!("{}: {}", "k-length".bold(), k.yellow().bold());
+    println!("{}: {}", "data".bold(), path.underline().bold().yellow());
+    println!("{}: {}", "reader".bold(), reader.yellow().bold());
     println!();
 
     if let Err(e) = run::run(config.path, config.k, config.reader) {
-        eprintln!("Application error: {}", e);
+        eprintln!("{}\n {}", "Application error:".red().bold(), e.to_string().red());
         drop(e);
         process::exit(1);
     }
