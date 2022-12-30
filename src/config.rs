@@ -23,7 +23,7 @@ impl Config {
 
         let reader = match reader {
             reader if matches!(reader, "needletail") => true,
-            reader if matches!(reader, "rust-bio") => true,
+            reader if matches!(reader, "rust-bio") => false,
             _ => return Err(format!("Invalid reader argument: \"{}\"", reader.bold()).into()),
         };
 
