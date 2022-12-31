@@ -26,7 +26,7 @@ impl Kmer {
     pub(crate) fn pack(&mut self) {
         for elem in self.bytes.iter() {
             self.packed_bits <<= 2;
-            let mask: u64 = Monomer::from_u8(elem).into();
+            let mask: u64 = u8::into_u64(elem);
             self.packed_bits |= mask
         }
     }
@@ -36,7 +36,7 @@ impl Kmer {
             .bytes
             .iter()
             .rev()
-            .map(|byte| Monomer::from_u8(byte).complement().into_u8())
+            .map(u8::complement)
             .collect::<Bytes>()
         {
             reverse_complement if reverse_complement.cmp(&self.bytes) == Ordering::Less => {
@@ -51,8 +51,7 @@ impl Kmer {
         self.bytes = (0..k)
             .into_iter()
             .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
-            .map(Monomer::from)
-            .map(|m| m.into_u8())
+            .map(u8::from_u64)
             .collect()
     }
 }
@@ -66,63 +65,40 @@ impl FromIterator<u8> for Kmer {
     }
 }
 
-pub(crate) enum Monomer {
-    A,
-    C,
-    G,
-    T,
+trait ByteConversions {
+    fn complement(u: &Self) -> Self;
+    fn from_u64(u: u64) -> Self;
+    fn into_u64(u: &Self) -> u64;
 }
 
-impl From<u64> for Monomer {
-    fn from(u: u64) -> Self {
+impl ByteConversions for u8 {
+    fn complement(u: &Self) -> Self {
+        match *u {
+            b'A' => b'T',
+            b'C' => b'G',
+            b'G' => b'C',
+            _ => b'A',
+        }
+    }
+    
+    fn from_u64(u: u64) -> Self {
         match u {
-            0 => Self::A,
-            1 => Self::C,
-            2 => Self::G,
-            _ => Self::T,
+            0 => b'A',
+            1 => b'C',
+            2 => b'G',
+            _ => b'T',
         }
     }
-}
-
-impl From<Monomer> for u64 {
-    fn from(m: Monomer) -> u64 {
-        match m {
-            Monomer::A => 0,
-            Monomer::C => 1,
-            Monomer::G => 2,
-            Monomer::T => 3,
+    
+    fn into_u64(u: &Self) -> u64 {
+        match *u {
+            b'A' => 0,
+            b'C' => 1,
+            b'G' => 2,
+            _ => 3,
         }
     }
-}
-
-impl Monomer {
-    fn complement(self) -> Self {
-        match self {
-            Self::A => Self::T,
-            Self::C => Self::G,
-            Self::G => Self::C,
-            Self::T => Self::A,
-        }
-    }
-
-    fn from_u8(byte: &u8) -> Self {
-        match byte {
-            b'A' => Self::A,
-            b'C' => Self::C,
-            b'G' => Self::G,
-            _ => Self::T,
-        }
-    }
-
-    fn into_u8(self) -> u8 {
-        match self {
-            Self::A => b'A',
-            Self::C => b'C',
-            Self::G => b'G',
-            Self::T => b'T',
-        }
-    }
-}
+} 
 
 #[cfg(test)]
 pub mod test {
