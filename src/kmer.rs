@@ -14,12 +14,12 @@ impl Kmer {
     pub(crate) fn from_sub(sub: Bytes) -> Result<Self, usize> {
         sub.into_iter()
             .enumerate()
-            .map(|(i, byte)| 
+            .map(|(i, byte)| {
                 Ok(match byte {
-                    b'A'|b'C'|b'G'|b'T' => byte,
+                    b'A' | b'C' | b'G' | b'T' => byte,
                     _ => return Err(i),
                 })
-            )
+            })
             .collect()
     }
 
@@ -80,7 +80,7 @@ impl ByteConversions for u8 {
             _ => b'A',
         }
     }
-    
+
     fn from_u64(u: u64) -> Self {
         match u {
             0 => b'A',
@@ -89,7 +89,7 @@ impl ByteConversions for u8 {
             _ => b'T',
         }
     }
-    
+
     fn into_u64(u: &Self) -> u64 {
         match *u {
             b'A' => 0,
@@ -98,7 +98,7 @@ impl ByteConversions for u8 {
             _ => 3,
         }
     }
-} 
+}
 
 #[cfg(test)]
 pub mod test {

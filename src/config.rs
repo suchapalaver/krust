@@ -1,4 +1,4 @@
-use std::{error::Error, path::PathBuf, fs};
+use std::{error::Error, fs, path::PathBuf};
 
 use colored::Colorize;
 

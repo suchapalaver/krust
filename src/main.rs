@@ -31,13 +31,23 @@ fn main() {
     let k = matches.get_one::<String>("k").expect("required");
     let path = matches.get_one::<String>("path").expect("required");
     let reader = matches.get_one::<String>("reader").unwrap();
-    
+
     eprintln!();
 
     let config = Config::new(k, path, reader).unwrap_or_else(|e| {
-        eprintln!("{}\n {}", "Problem parsing arguments:".red().bold(), e.to_string().red());
+        eprintln!(
+            "{}\n {}",
+            "Problem parsing arguments:".red().bold(),
+            e.to_string().red()
+        );
         eprintln!();
-        eprintln!("{}\n {}\n  {}\n   {}", "Help menu:".green().bold(), "$ cargo run -- --help".bold(), "or".underline(), "$ krust --help".bold());
+        eprintln!(
+            "{}\n {}\n  {}\n   {}",
+            "Help menu:".green().bold(),
+            "$ cargo run -- --help".bold(),
+            "or".underline(),
+            "$ krust --help".bold()
+        );
         eprintln!();
         process::exit(1);
     });
@@ -48,7 +58,11 @@ fn main() {
     eprintln!();
 
     if let Err(e) = run::run(config.path, config.k, config.reader) {
-        eprintln!("{}\n {}", "Application error:".red().bold(), e.to_string().red());
+        eprintln!(
+            "{}\n {}",
+            "Application error:".red().bold(),
+            e.to_string().red()
+        );
         drop(e);
         process::exit(1);
     }

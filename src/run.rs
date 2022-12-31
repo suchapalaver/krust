@@ -70,10 +70,8 @@ impl KmerMap for DashFx {
         sequences: rayon::vec::IntoIter<Bytes>,
         k: usize,
     ) -> Result<Self, Box<dyn Error>> {
-        sequences.for_each(|seq| {
-            self.process_sequence(&seq, &k)
-        });
-        
+        sequences.for_each(|seq| self.process_sequence(&seq, &k));
+
         Ok(self)
     }
 
