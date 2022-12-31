@@ -1,9 +1,15 @@
 [package]
-name = "krust"
-version = "0.1.0"
+authors = ["Joseph Livesey <jlivesey@gmail.com>"]
+description = "counts kmers, written in rust"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+homepage = "https://github.com/suchapalaver/krust"
+include = ["src/*", "LICENSE", "README.md"]
+keywords = ["bioinformatics", "kmer"]
+license = "MIT"
+name = "krust"
+readme = "./README.md"
+repository = "https://github.com/suchapalaver/krust"
+version = "0.1.0"
 
 [dependencies]
 bio = "*"
