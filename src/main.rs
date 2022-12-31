@@ -32,7 +32,7 @@ fn main() {
     let path = matches.get_one::<String>("path").expect("required");
     let reader = matches.get_one::<String>("reader").unwrap();
     
-    println!();
+    eprintln!();
 
     let config = Config::new(k, path, reader).unwrap_or_else(|e| {
         eprintln!("{}\n {}", "Problem parsing arguments:".red().bold(), e.to_string().red());
@@ -42,10 +42,10 @@ fn main() {
         process::exit(1);
     });
 
-    println!("{}: {}", "k-length".bold(), k.yellow().bold());
-    println!("{}: {}", "data".bold(), path.underline().bold().yellow());
-    println!("{}: {}", "reader".bold(), reader.yellow().bold());
-    println!();
+    eprintln!("{}: {}", "k-length".bold(), k.yellow().bold());
+    eprintln!("{}: {}", "data".bold(), path.underline().bold().yellow());
+    eprintln!("{}: {}", "reader".bold(), reader.yellow().bold());
+    eprintln!();
 
     if let Err(e) = run::run(config.path, config.k, config.reader) {
         eprintln!("{}\n {}", "Application error:".red().bold(), e.to_string().red());
