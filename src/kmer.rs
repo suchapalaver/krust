@@ -11,15 +11,15 @@ pub(crate) struct Kmer {
 }
 
 impl Kmer {
-    pub(crate) fn from_sub(sub: &Bytes) -> Result<Self, usize> {
-        sub.iter()
+    pub(crate) fn from_sub(sub: Bytes) -> Result<Self, usize> {
+        sub.into_iter()
             .enumerate()
-            .map(|x| {
-                Ok(match Monomer::try_from(x) {
-                    Ok(b) => b,
-                    Err(i) => return Err(i),
+            .map(|(i, byte)| 
+                Ok(match byte {
+                    b'A'|b'C'|b'G'|b'T' => byte,
+                    _ => return Err(i),
                 })
-            })
+            )
             .collect()
     }
 
@@ -57,10 +57,10 @@ impl Kmer {
     }
 }
 
-impl FromIterator<Monomer> for Kmer {
-    fn from_iter<I: IntoIterator<Item = Monomer>>(iter: I) -> Self {
+impl FromIterator<u8> for Kmer {
+    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
         Self {
-            bytes: iter.into_iter().map(Monomer::into_u8).collect(),
+            bytes: iter.into_iter().collect(),
             ..Default::default()
         }
     }
@@ -71,20 +71,6 @@ pub(crate) enum Monomer {
     C,
     G,
     T,
-}
-
-impl TryFrom<(usize, &u8)> for Monomer {
-    type Error = usize;
-
-    fn try_from(value: (usize, &u8)) -> Result<Self, Self::Error> {
-        match value {
-            (_, b'A') => Ok(Self::A),
-            (_, b'C') => Ok(Self::C),
-            (_, b'G') => Ok(Self::G),
-            (_, b'T') => Ok(Self::T),
-            (invalid_byte_index, _) => Err(invalid_byte_index),
-        }
-    }
 }
 
 impl From<u64> for Monomer {
@@ -145,44 +131,37 @@ pub mod test {
     #[test]
     fn bytes_from_valid_substring() {
         let sub = &[b'G', b'A', b'T', b'T', b'A', b'C', b'A'];
-        let k = Kmer::from_sub(&Bytes::copy_from_slice(sub)).unwrap();
+        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
         insta::assert_snapshot!(format!("{:?}", k.bytes), @r###"b"GATTACA""###);
-    }
-
-    #[test]
-    fn error_on_invalid_byte() {
-        let enumeration = 0;
-        let b = b'N';
-        assert!(Monomer::try_from((enumeration, &b)).is_err());
     }
 
     #[test]
     fn from_substring_returns_err_for_invalid_substring() {
         let sub = &[b'N'];
-        let k = Kmer::from_sub(&Bytes::copy_from_slice(sub));
+        let k = Kmer::from_sub(Bytes::copy_from_slice(sub));
         assert!(k.is_err());
     }
 
     #[test]
     fn from_sub_finds_invalid_byte_index() {
         let dna = "NACNN".as_bytes();
-        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        let ans = Kmer::from_sub(Bytes::copy_from_slice(dna));
         assert_eq!(Err(0), ans);
 
         let dna = "ANCNG".as_bytes();
-        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        let ans = Kmer::from_sub(Bytes::copy_from_slice(dna));
         assert_eq!(Err(1), ans);
 
         let dna = "AANTG".as_bytes();
-        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        let ans = Kmer::from_sub(Bytes::copy_from_slice(dna));
         assert_eq!(Err(2), ans);
 
         let dna = "CCCNG".as_bytes();
-        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        let ans = Kmer::from_sub(Bytes::copy_from_slice(dna));
         assert_eq!(Err(3), ans);
 
         let dna = "AACTN".as_bytes();
-        let ans = Kmer::from_sub(&Bytes::copy_from_slice(dna));
+        let ans = Kmer::from_sub(Bytes::copy_from_slice(dna));
         assert_eq!(Err(4), ans);
     }
 }

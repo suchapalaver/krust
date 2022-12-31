@@ -87,7 +87,7 @@ impl KmerMap for DashFx {
         while i <= seq.len() - k {
             let sub = seq.slice(i..i + k);
 
-            match Kmer::from_sub(&sub) {
+            match Kmer::from_sub(sub) {
                 Ok(mut kmer) => self.process_valid_bytes(&mut kmer),
                 Err(invalid_byte_index) => i += invalid_byte_index,
             }
