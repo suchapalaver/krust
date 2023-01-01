@@ -16,8 +16,8 @@ use std::{
 };
 
 custom_error::custom_error! { pub ProcessError
-    ReadError{source: Box<dyn Error>} = "Unable to read input",
-    WriteError{source: IoError} = "Unable to write output",
+    ReadError{source: Box<dyn Error>} = "Unable to read input: {source}",
+    WriteError{source: IoError} = "Unable to write output: {source}",
 }
 
 pub fn run<P>(path: P, k: usize, reader: bool) -> Result<(), ProcessError>
