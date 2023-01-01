@@ -4,7 +4,7 @@ use bio::io::fasta::Reader;
 use bytes::Bytes;
 use needletail::parse_fastx_file;
 use rayon::{
-    prelude::{IntoParallelIterator, ParallelBridge, ParallelIterator},
+    prelude::IntoParallelIterator,
     vec::IntoIter,
 };
 
@@ -19,7 +19,6 @@ impl SequenceReader for RustBio {
         Ok(Reader::from_file(path)?
             .records()
             .into_iter()
-            .par_bridge()
             .map(|read| read.expect("Error reading fasta record."))
             .map(|record| Bytes::copy_from_slice(record.seq()))
             .collect::<Vec<Bytes>>()
