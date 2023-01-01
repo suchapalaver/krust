@@ -29,7 +29,7 @@ where
         false => RustBio::sequence_reader(path),
     };
 
-    DashFx::new().build(reader?, k)?.output(k)?;
+    KmerMap::new().build(reader?, k)?.output(k)?;
 
     Ok(())
 }
@@ -40,25 +40,11 @@ where
 /// Useful: [Using a Custom Hash Function in Rust](https://docs.rs/hashers/1.0.1/hashers/#using-a-custom-hash-function-in-rust)
 type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
 
-trait KmerMap {
-    fn new() -> Self;
-    fn build(
-        self,
-        sequences: rayon::vec::IntoIter<Bytes>,
-        k: usize,
-    ) -> Result<Self, Box<dyn Error>>
-    where
-        Self: Sized;
-    fn process_sequence(&self, seq: &Bytes, k: &usize);
-    fn process_valid_bytes(&self, kmer: &mut Kmer);
-    fn log(&self, kmer: &Kmer);
-    fn output(self, k: usize) -> Result<(), ProcessError>;
-    fn stream(self, k: usize) -> IntoIter<String, i32>;
-}
+struct KmerMap(DashFx);
 
-impl KmerMap for DashFx {
+impl KmerMap {
     fn new() -> Self {
-        DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default())
+        Self(DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default()))
     }
 
     /// Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
@@ -100,7 +86,7 @@ impl KmerMap for DashFx {
 
         // If the k-mer as found in the sequence is already a key in the `Dashmap`,
         // increment its value and move on
-        if let Some(mut count) = self.get_mut(&kmer.packed_bits) {
+        if let Some(mut count) = self.0.get_mut(&kmer.packed_bits) {
             *count += 1;
         } else {
             kmer.canonical();
@@ -117,7 +103,7 @@ impl KmerMap for DashFx {
     }
 
     fn log(&self, kmer: &Kmer) {
-        *self.entry(kmer.packed_bits).or_insert(0) += 1
+        *self.0.entry(kmer.packed_bits).or_insert(0) += 1
     }
 
     fn output(self, k: usize) -> Result<(), ProcessError> {
@@ -133,7 +119,7 @@ impl KmerMap for DashFx {
     }
 
     fn stream(self, k: usize) -> IntoIter<String, i32> {
-        self.into_iter()
+        self.0.into_iter()
             .par_bridge()
             .map(|(packed_bits, count)| Kmer {
                 packed_bits,
