@@ -20,13 +20,13 @@ custom_error::custom_error! { pub ProcessError
     WriteError{source: IoError} = "Unable to write output: {source}",
 }
 
-pub fn run<P>(path: P, k: usize, reader: bool) -> Result<(), ProcessError>
+pub fn run<P>(path: P, k: usize) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
 {
-    let reader = match reader {
+    let reader = match cfg!(feature = "needletail") {
         true => Needletail::sequence_reader(path),
-        false => RustBio::sequence_reader(path),
+        _ => RustBio::sequence_reader(path),
     };
 
     KmerMap::new().build(reader?, k)?.output(k)?;
@@ -44,7 +44,9 @@ struct KmerMap(DashFx);
 
 impl KmerMap {
     fn new() -> Self {
-        Self(DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default()))
+        Self(DashMap::with_hasher(
+            BuildHasherDefault::<FxHasher>::default(),
+        ))
     }
 
     /// Reads sequences from fasta records in parallel using [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
@@ -119,7 +121,8 @@ impl KmerMap {
     }
 
     fn stream(self, k: usize) -> IntoIter<String, i32> {
-        self.0.into_iter()
+        self.0
+            .into_iter()
             .par_bridge()
             .map(|(packed_bits, count)| Kmer {
                 packed_bits,

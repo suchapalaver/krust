@@ -20,44 +20,42 @@ fn main() {
                 .help("path to a FASTA file, e.g. /home/lisa/bio/cerevisiae.pan.fa")
                 .required(true),
         )
-        .arg(
-            Arg::new("reader")
-                .help("select *rust-bio* or *needletail* as FASTA reader")
-                .required(false)
-                .default_value("rust-bio"),
-        )
         .get_matches();
 
     let k = matches.get_one::<String>("k").expect("required");
     let path = matches.get_one::<String>("path").expect("required");
-    let reader = matches.get_one::<String>("reader").unwrap();
 
-    eprintln!();
+    println!();
 
-    let config = Config::new(k, path, reader).unwrap_or_else(|e| {
-        eprintln!(
+    let config = Config::new(k, path).unwrap_or_else(|e| {
+        println!(
             "{}\n {}",
             "Problem parsing arguments:".blue().bold(),
             e.to_string().blue()
         );
-        eprintln!();
-        eprintln!(
+        println!();
+        println!(
             "{}\n {}\n  {}\n   {}",
             "Help menu:".blue().bold(),
             "$ cargo run -- --help".bold(),
             "or".underline(),
             "$ krust --help".bold()
         );
-        eprintln!();
+        println!();
         process::exit(1);
     });
 
-    eprintln!("{}: {}", "k-length".bold(), k.blue().bold());
-    eprintln!("{}: {}", "data".bold(), path.underline().bold().blue());
-    eprintln!("{}: {}", "reader".bold(), reader.blue().bold());
-    eprintln!();
+    let reader = match cfg!(feature = "needletail") {
+        true => "needletail",
+        _ => "rust-bio",
+    };
 
-    if let Err(e) = run::run(config.path, config.k, config.reader) {
+    println!("{}: {}", "k-length".bold(), k.blue().bold());
+    println!("{}: {}", "data".bold(), path.underline().bold().blue());
+    println!("{}: {}", "reader".bold(), reader.blue().bold());
+    println!();
+
+    if let Err(e) = run::run(config.path, config.k) {
         eprintln!(
             "{}\n {}",
             "Application error:".blue().bold(),

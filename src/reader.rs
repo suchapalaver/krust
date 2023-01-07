@@ -3,10 +3,7 @@ use std::{error::Error, fmt::Debug, path::Path};
 use bio::io::fasta::Reader;
 use bytes::Bytes;
 use needletail::parse_fastx_file;
-use rayon::{
-    prelude::IntoParallelIterator,
-    vec::IntoIter,
-};
+use rayon::{prelude::IntoParallelIterator, vec::IntoIter};
 
 pub(crate) trait SequenceReader {
     fn sequence_reader<P: AsRef<Path> + Debug>(path: P) -> Result<IntoIter<Bytes>, Box<dyn Error>>;

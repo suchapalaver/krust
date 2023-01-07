@@ -24,3 +24,10 @@ rayon = "*"
 
 [dev-dependencies]
 insta = "1.14.1"
+
+[features]
+default = ["rust-bio"]
+# Use needletail fasta reader
+needletail = []
+# Use rust-bio fasta reader
+rust-bio = []
