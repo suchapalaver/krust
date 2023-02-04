@@ -11,10 +11,15 @@ use std::{
     io::{stdout, BufWriter, Error as IoError, Write},
     path::Path,
 };
+use thiserror::Error;
 
-custom_error::custom_error! { pub ProcessError
-    ReadError{source: Box<dyn Error>} = "Unable to read input: {source}",
-    WriteError{source: IoError} = "Unable to write output: {source}",
+#[derive(Debug, Error)]
+pub enum ProcessError {
+    #[error("Unable to read input: {0}")]
+    ReadError(#[from] Box<dyn Error>),
+
+    #[error("Unable to write output: {0}")]
+    WriteError(#[from] IoError),
 }
 
 pub fn run<P>(path: P, k: usize) -> Result<(), ProcessError>
@@ -104,7 +109,7 @@ impl KmerMap {
         let mut buf = BufWriter::new(stdout());
 
         for (kmer, count) in self.stream(k) {
-            writeln!(buf, ">{}\n{}", count, kmer)?
+            writeln!(buf, ">{count}\n{kmer}")?
         }
 
         buf.flush()?;
