@@ -103,7 +103,7 @@ pub mod test {
     fn bytes_from_valid_substring() {
         let sub = &[b'G', b'A', b'T', b'T', b'A', b'C', b'A'];
         let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k.bytes), @r###"b"GATTACA""###);
+        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"GATTACA""#);
     }
 
     #[test]
