@@ -7,8 +7,7 @@ use rayon::{prelude::IntoParallelIterator, vec::IntoIter};
 pub(crate) fn read<P: AsRef<Path> + Debug>(path: P) -> Result<IntoIter<Bytes>, Box<dyn Error>> {
     Ok(bio::io::fasta::Reader::from_file(path)?
         .records()
-        .into_iter()
-        .map(|read| read.expect("Error reading fasta record."))
+        .map(|read| read.expect("Error reading FASTA record."))
         .map(|record| Bytes::copy_from_slice(record.seq()))
         .collect::<Vec<Bytes>>()
         .into_par_iter())
@@ -20,8 +19,7 @@ pub(crate) fn read<P: AsRef<Path> + Debug>(path: P) -> Result<IntoIter<Bytes>, B
     let mut v = Vec::new();
     while let Some(record) = reader.next() {
         let record = record.expect("invalid record");
-        let seq = record.seq();
-        let seq = Bytes::copy_from_slice(&seq);
+        let seq = Bytes::copy_from_slice(&record.seq());
         v.push(seq);
     }
     Ok(v.into_par_iter())

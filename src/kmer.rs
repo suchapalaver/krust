@@ -49,7 +49,6 @@ impl Kmer {
 
     pub(crate) fn unpack(&mut self, k: usize) {
         self.bytes = (0..k)
-            .into_iter()
             .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
             .map(ByteConversion::from_u64)
             .collect()
