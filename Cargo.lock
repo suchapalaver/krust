@@ -135,10 +135,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "buf_redux"
-version = "0.8.4"
+name = "buffer-redux"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b953a6887648bb07a535631f2bc00fbdb2a2216f135552cb3f534ed136b9c07f"
+checksum = "d2886ea01509598caac116942abd33ab5a88fa32acdf7e4abfa0fc489ca520c9"
 dependencies = [
  "memchr",
  "safemem",
@@ -719,11 +719,11 @@ dependencies = [
 
 [[package]]
 name = "needletail"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fb4c43ebd04b0e776119c8fc3bd4c28178619cd04e1f19f600a4ef0282fa3cc"
+checksum = "db05a5ab397f64070d8c998fa0fbb84e484b81f95752af317dac183a82d9295d"
 dependencies = [
- "buf_redux",
+ "buffer-redux",
  "bytecount",
  "bzip2",
  "flate2",
