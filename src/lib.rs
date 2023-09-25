@@ -25,7 +25,8 @@
 //! Returns k-mer counts for individual sequences in a fasta file.
 //! - Testing!
 
+pub mod cli;
 pub mod config;
-pub(crate) mod kmer;
-pub(crate) mod reader;
+pub mod kmer;
+pub mod reader;
 pub mod run;
