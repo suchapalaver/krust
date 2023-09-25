@@ -26,7 +26,8 @@ impl Kmer {
     pub fn pack_bits(&mut self) {
         for elem in self.bytes.iter() {
             self.packed_bits <<= 2;
-            let mask: u64 = ByteConversion::into_u64(elem);
+            let byte: KmerByte = elem.into();
+            let mask: u64 = byte.into();
             self.packed_bits |= mask
         }
     }
@@ -36,7 +37,9 @@ impl Kmer {
             .bytes
             .iter()
             .rev()
-            .map(ByteConversion::reverse_complement)
+            .map(KmerByte::from)
+            .map(KmerByte::reverse_complement)
+            .map(KmerByte::into)
             .collect::<Bytes>()
         {
             reverse_complement if reverse_complement.cmp(&self.bytes) == Ordering::Less => {
@@ -50,7 +53,8 @@ impl Kmer {
     pub fn unpack_bits(&mut self, k: usize) {
         self.bytes = (0..k)
             .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
-            .map(ByteConversion::from_u64)
+            .map(KmerByte::from)
+            .map(KmerByte::into)
             .collect()
     }
 }
@@ -64,33 +68,66 @@ impl FromIterator<u8> for Kmer {
     }
 }
 
-struct ByteConversion;
+pub enum KmerByte {
+    A,
+    C,
+    G,
+    T,
+}
 
-impl ByteConversion {
-    fn reverse_complement(u: &u8) -> u8 {
-        match *u {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            _ => b'A',
+impl From<&u8> for KmerByte {
+    fn from(val: &u8) -> Self {
+        match val {
+            b'A' => KmerByte::A,
+            b'C' => KmerByte::C,
+            b'G' => KmerByte::G,
+            b'T' => KmerByte::T,
+            _ => unreachable!(),
         }
     }
+}
 
-    fn from_u64(u: u64) -> u8 {
-        match u {
-            0 => b'A',
-            1 => b'C',
-            2 => b'G',
-            _ => b'T',
+impl From<KmerByte> for u8 {
+    fn from(val: KmerByte) -> Self {
+        match val {
+            KmerByte::A => b'A',
+            KmerByte::C => b'C',
+            KmerByte::G => b'G',
+            KmerByte::T => b'T',
         }
     }
+}
 
-    fn into_u64(u: &u8) -> u64 {
-        match *u {
-            b'A' => 0,
-            b'C' => 1,
-            b'G' => 2,
-            _ => 3,
+impl From<u64> for KmerByte {
+    fn from(val: u64) -> Self {
+        match val {
+            0 => KmerByte::A,
+            1 => KmerByte::C,
+            2 => KmerByte::G,
+            3 => KmerByte::T,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<KmerByte> for u64 {
+    fn from(val: KmerByte) -> Self {
+        match val {
+            KmerByte::A => 0,
+            KmerByte::C => 1,
+            KmerByte::G => 2,
+            KmerByte::T => 3,
+        }
+    }
+}
+
+impl KmerByte {
+    pub fn reverse_complement(self) -> Self {
+        match self {
+            Self::A => Self::T,
+            Self::C => Self::G,
+            Self::G => Self::C,
+            Self::T => Self::A,
         }
     }
 }
