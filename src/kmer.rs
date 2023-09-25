@@ -3,15 +3,15 @@ use std::cmp::Ordering;
 use bytes::Bytes;
 
 #[derive(Debug, Default, Eq, PartialEq, Hash)]
-pub(crate) struct Kmer {
-    pub(crate) bytes: Bytes,
-    pub(crate) packed_bits: u64,
-    pub(crate) reverse_complement: bool,
-    pub(crate) count: i32,
+pub struct Kmer {
+    pub bytes: Bytes,
+    pub packed_bits: u64,
+    pub reverse_complement: bool,
+    pub count: i32,
 }
 
 impl Kmer {
-    pub(crate) fn from_sub(sub: Bytes) -> Result<Self, usize> {
+    pub fn from_sub(sub: Bytes) -> Result<Self, usize> {
         sub.into_iter()
             .enumerate()
             .map(|(i, byte)| {
@@ -23,7 +23,7 @@ impl Kmer {
             .collect()
     }
 
-    pub(crate) fn pack(&mut self) {
+    pub fn pack_bits(&mut self) {
         for elem in self.bytes.iter() {
             self.packed_bits <<= 2;
             let mask: u64 = ByteConversion::into_u64(elem);
@@ -31,7 +31,7 @@ impl Kmer {
         }
     }
 
-    pub(crate) fn canonical(&mut self) {
+    pub fn canonical(&mut self) {
         match self
             .bytes
             .iter()
@@ -47,7 +47,7 @@ impl Kmer {
         }
     }
 
-    pub(crate) fn unpack(&mut self, k: usize) {
+    pub fn unpack_bits(&mut self, k: usize) {
         self.bytes = (0..k)
             .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
             .map(ByteConversion::from_u64)

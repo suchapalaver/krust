@@ -81,7 +81,7 @@ impl KmerMap {
 
     /// Convert a valid sequence substring from a bytes string to a u64
     fn process_valid_bytes(&self, kmer: &mut Kmer) {
-        kmer.pack();
+        kmer.pack_bits();
 
         // If the k-mer as found in the sequence is already a key in the `Dashmap`,
         // increment its value and move on
@@ -94,7 +94,7 @@ impl KmerMap {
                 // Re-initialize packed bits
                 kmer.packed_bits = Default::default();
                 // Compress the canonical k-mer into a 64-bit unsigned integer
-                kmer.pack();
+                kmer.pack_bits();
             }
 
             self.log(kmer);
@@ -127,7 +127,7 @@ impl KmerMap {
                 ..Default::default()
             })
             .map(|mut kmer| {
-                kmer.unpack(k);
+                kmer.unpack_bits(k);
                 (String::from_utf8(kmer.bytes.to_vec()).unwrap(), kmer.count)
             })
             .collect::<HashMap<String, i32>>()
