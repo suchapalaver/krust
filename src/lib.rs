@@ -1,32 +1,51 @@
 //! # krust
 //!
-//! `krust` is a [k-mer](https://en.wikipedia.org/wiki/K-mer) counter
-//! written in Rust and run from the command line that will output canonical
-//! k-mers and their frequency across the records in a fasta file.
+//! A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA files.
 //!
-//! `krust` prints to `stdout`, writing, on alternate lines, just like the popular [`Jellyfish`](https://github.com/gmarcais/Jellyfish) k-mer counter:
-//! ```>{frequency}```
-//! ```{canonical k-mer}```
+//! ## Features
 //!
-//! `krust` has been tested throughout production against [`jellyfish`](https://github.com/gmarcais/Jellyfish)'s results for the same data sets.
+//! - Parallel processing using [rayon](https://docs.rs/rayon) and [dashmap](https://docs.rs/dashmap)
+//! - Outputs canonical k-mers (lexicographically smaller of k-mer and reverse complement)
+//! - Supports k-mer lengths from 1 to 32
+//! - Handles sequences with N bases (skips invalid k-mers)
+//! - Compatible output format with [Jellyfish](https://github.com/gmarcais/Jellyfish)
 //!
-//! `krust` uses [`dashmap`](https://docs.rs/crate/dashmap/4.0.2),
-//! [`rust-bio`](https://docs.rs/bio/0.38.0/bio/), [`rayon`](https://docs.rs/rayon/1.5.1/rayon/),
-//! and [`fxhash`](https://crates.io/crates/fxhash).
+//! ## CLI Usage
 //!
-//! Run `krust` on the test data in the [`krust` Github repo](https://github.com/suchapalaver/krust),
-//! searching for kmers of length 5, like this:
-//! ```$ cargo run --release 5 path/to/cerevisae.pan.fa > output.tsv```
-//! or, searching for kmers of length 21:
-//! ```$ cargo run --release 21 path/to/cerevisae.pan.fa > output.tsv```
+//! ```bash
+//! # Count 21-mers in a FASTA file
+//! krust 21 sequences.fa > kmers.txt
 //!
-//! Future:
-//! - ```fn single_sequence_canonical_kmers(filepath: String, k: usize) {}```
-//! Returns k-mer counts for individual sequences in a fasta file.
-//! - Testing!
+//! # Count 5-mers
+//! krust 5 sequences.fa > kmers.txt
+//! ```
+//!
+//! ## Output Format
+//!
+//! Output is written to stdout in FASTA-like format:
+//! ```text
+//! >{count}
+//! {canonical_kmer}
+//! ```
+//!
+//! ## Library Usage
+//!
+//! ```rust,no_run
+//! use krust::run::count_kmers;
+//! use std::path::PathBuf;
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let path = PathBuf::from("sequences.fa");
+//!     let counts = count_kmers(&path, 21)?;
+//!     for (kmer, count) in counts {
+//!         println!("{kmer}: {count}");
+//!     }
+//!     Ok(())
+//! }
+//! ```
 
 pub mod cli;
 pub mod config;
 pub mod kmer;
-pub mod reader;
+pub(crate) mod reader;
 pub mod run;

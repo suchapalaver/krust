@@ -1,41 +1,121 @@
-# `krust`: counts k-mers, written in rust
+# krust
 
-`krust` is a [k-mer](https://en.wikipedia.org/wiki/K-mer) counter - a bioinformatics 101 tool for counting the frequency of substrings of length `k` within strings of DNA data. `krust` is written in Rust and run from the command line. It takes a FASTA file of DNA sequences and will output all canonical k-mers (the double helix means each k-mer has a [reverse complement](https://en.wikipedia.org/wiki/Complementarity_(molecular_biology)#DNA_and_RNA_base_pair_complementarity)) and their frequency across all records in the given data. `krust` is tested for accuracy against [jellyfish](https://github.com/gmarcais/Jellyfish).
+[![Crates.io](https://img.shields.io/crates/v/krust.svg)](https://crates.io/crates/krust)
+[![Documentation](https://docs.rs/krust/badge.svg)](https://docs.rs/krust)
+[![CI](https://github.com/suchapalaver/krust/workflows/CI/badge.svg)](https://github.com/suchapalaver/krust/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA files.
+
+## Features
+
+- **Fast parallel processing** using [rayon](https://docs.rs/rayon) and [dashmap](https://docs.rs/dashmap)
+- **Canonical k-mers** - outputs the lexicographically smaller of each k-mer and its reverse complement
+- **Flexible k-mer lengths** from 1 to 32
+- **Handles N bases** by skipping invalid k-mers
+- **Jellyfish-compatible output** format for easy integration with existing pipelines
+- **Tested for accuracy** against [Jellyfish](https://github.com/gmarcais/Jellyfish)
+
+## Installation
+
+### From crates.io
 
 ```bash
-krust: counts k-mers, written in rust
-
-Usage: krust <k> <path>
-
-Arguments:
-  <k>     provides k length, e.g. 5
-  <path>  path to a FASTA file, e.g. /home/lisa/bio/cerevisiae.pan.fa
-
-Options:
-  -h, --help     Print help information
-  -V, --version  Print version information
+cargo install krust
 ```
 
-`krust` supports either `rust-bio` or `needletail` to read FASTA record. Use the `--features` flag to select.  
-
-Run `krust` with `rust-bio`'s fasta reader to count *5*-mers like this:
+### From source
 
 ```bash
-cargo run --release --features rust-bio -- 5 your/local/path/to/fasta_data.fa
+git clone https://github.com/suchapalaver/krust.git
+cd krust
+cargo install --path .
 ```
 
-or, searching for *21*-mers with `needletail` as the fasta reader, like this:  
+## Usage
 
 ```bash
-cargo run --release --features needletail -- 21 your/local/path/to/fasta_data.fa
+krust <k> <path>
 ```
 
-`krust` prints to `stdout`, writing, on alternate lines:
+### Arguments
+
+- `<k>` - K-mer length (1-32)
+- `<path>` - Path to a FASTA file
+
+### Options
+
+- `-h, --help` - Print help information
+- `-V, --version` - Print version information
+
+### Examples
+
+Count 21-mers in a FASTA file:
 
 ```bash
+krust 21 sequences.fa > kmers.txt
+```
+
+Count 5-mers:
+
+```bash
+krust 5 sequences.fa > kmers.txt
+```
+
+### FASTA Readers
+
+krust supports two FASTA readers via feature flags:
+
+- `rust-bio` (default) - Uses the [rust-bio](https://docs.rs/bio) library
+- `needletail` - Uses the [needletail](https://docs.rs/needletail) library
+
+To use needletail instead:
+
+```bash
+cargo run --release --no-default-features --features needletail -- 21 sequences.fa
+```
+
+## Output Format
+
+Output is written to stdout in FASTA-like format:
+
+```
+>{count}
+{canonical_kmer}
+```
+
+Example output:
+
+```
 >114928
 ATGCC
 >289495
 AATCA
-...
-```  
+```
+
+## Library Usage
+
+krust can also be used as a library:
+
+```rust
+use krust::run::run;
+use std::path::PathBuf;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from("sequences.fa");
+    run(path, 21)?;
+    Ok(())
+}
+```
+
+## Performance
+
+krust uses parallel processing to efficiently count k-mers:
+
+- Sequences are processed in parallel using rayon
+- A concurrent hash map (dashmap) allows lock-free updates
+- FxHash provides fast hashing for 64-bit packed k-mers
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
