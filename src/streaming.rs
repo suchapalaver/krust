@@ -357,16 +357,8 @@ impl StreamingKmerCounter {
     }
 
     fn process_valid_kmer(&self, unpacked: Kmer) {
-        let packed = unpacked.pack();
-
-        // Optimization: check if we've already seen this exact k-mer
-        if let Some(mut count) = self.counts.get_mut(&packed.packed_bits()) {
-            *count += 1;
-        } else {
-            // Not seen before - compute canonical form
-            let canonical = packed.canonical();
-            *self.counts.entry(canonical.packed_bits()).or_insert(0) += 1;
-        }
+        let canonical = unpacked.pack().canonical();
+        *self.counts.entry(canonical.packed_bits()).or_insert(0) += 1;
     }
 }
 

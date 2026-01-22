@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `count_kmers` now validates k-mer length upfront and returns a clear error
 - K-mer packing uses direct lookup tables instead of match statements
 - Canonical computation avoids allocation when the original form is already canonical
+- Simplified `process_valid_kmer()` by removing misleading "optimization" that only helped ~50% of k-mers
+- Made `needletail` a truly optional dependency (compile-time savings when not using needletail feature)
+- Builder API always uses canonical k-mers (removed unused `canonical` field)
 - Updated all dependencies to latest stable versions
 - Replaced `fxhash` with `rustc-hash` (maintained successor)
 - CLI version now reads from Cargo.toml
@@ -72,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Deprecated `config.rs` module
+- Unused `canonical` field and method from `KmerCounter` builder (all counting is canonical)
 
 ### Fixed
 

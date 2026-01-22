@@ -11,7 +11,6 @@
 //! let counts = KmerCounter::new()
 //!     .k(21)?
 //!     .min_count(2)
-//!     .canonical(true)
 //!     .count("genome.fa")?;
 //!
 //! for (kmer, count) in counts {
@@ -50,7 +49,6 @@ use crate::{
 /// let counts = KmerCounter::new()
 ///     .k(21)?
 ///     .min_count(5)
-///     .canonical(true)
 ///     .count("sequences.fa")?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -58,7 +56,6 @@ use crate::{
 pub struct KmerCounter {
     k: Option<KmerLength>,
     min_count: i32,
-    canonical: bool,
     format: OutputFormat,
 }
 
@@ -74,8 +71,10 @@ impl KmerCounter {
     /// Default settings:
     /// - `k`: None (must be set before counting)
     /// - `min_count`: 1 (include all k-mers)
-    /// - `canonical`: true (use canonical k-mers)
     /// - `format`: FASTA
+    ///
+    /// Note: All k-mer counting uses canonical k-mers (k-mer and its reverse
+    /// complement are treated as equivalent).
     ///
     /// # Example
     ///
@@ -89,7 +88,6 @@ impl KmerCounter {
         Self {
             k: None,
             min_count: 1,
-            canonical: true,
             format: OutputFormat::Fasta,
         }
     }
@@ -154,28 +152,6 @@ impl KmerCounter {
     #[must_use]
     pub fn min_count(mut self, min_count: i32) -> Self {
         self.min_count = min_count;
-        self
-    }
-
-    /// Sets whether to use canonical k-mers.
-    ///
-    /// When true (default), k-mers and their reverse complements are treated
-    /// as equivalent, with the lexicographically smaller form used as the key.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use kmerust::builder::KmerCounter;
-    ///
-    /// // Disable canonical mode (count forward and reverse separately)
-    /// let counter = KmerCounter::new()
-    ///     .k(21)?
-    ///     .canonical(false);
-    /// # Ok::<(), kmerust::error::KmerLengthError>(())
-    /// ```
-    #[must_use]
-    pub fn canonical(mut self, canonical: bool) -> Self {
-        self.canonical = canonical;
         self
     }
 
@@ -486,12 +462,6 @@ impl KmerCounter {
         self.min_count
     }
 
-    /// Returns whether canonical mode is enabled.
-    #[must_use]
-    pub fn is_canonical(&self) -> bool {
-        self.canonical
-    }
-
     /// Returns the configured output format.
     #[must_use]
     pub fn get_format(&self) -> OutputFormat {
@@ -509,7 +479,6 @@ mod tests {
         let counter = KmerCounter::new();
         assert!(counter.get_k().is_none());
         assert_eq!(counter.get_min_count(), 1);
-        assert!(counter.is_canonical());
     }
 
     #[test]
@@ -541,12 +510,6 @@ mod tests {
     }
 
     #[test]
-    fn builder_canonical() {
-        let counter = KmerCounter::new().canonical(false);
-        assert!(!counter.is_canonical());
-    }
-
-    #[test]
     fn builder_format() {
         let counter = KmerCounter::new().format(OutputFormat::Tsv);
         assert!(matches!(counter.get_format(), OutputFormat::Tsv));
@@ -558,12 +521,10 @@ mod tests {
             .k(21)
             .unwrap()
             .min_count(3)
-            .canonical(false)
             .format(OutputFormat::Json);
 
         assert_eq!(counter.get_k().unwrap().get(), 21);
         assert_eq!(counter.get_min_count(), 3);
-        assert!(!counter.is_canonical());
         assert!(matches!(counter.get_format(), OutputFormat::Json));
     }
 

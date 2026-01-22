@@ -305,16 +305,8 @@ impl KmerMap {
     }
 
     fn process_valid_kmer(&self, unpacked: Kmer) {
-        let packed = unpacked.pack();
-
-        // Optimization: check if we've already seen this exact k-mer
-        if let Some(mut count) = self.0.get_mut(&packed.packed_bits()) {
-            *count += 1;
-        } else {
-            // Not seen before - compute canonical form
-            let canonical = packed.canonical();
-            *self.0.entry(canonical.packed_bits()).or_insert(0) += 1;
-        }
+        let canonical = unpacked.pack().canonical();
+        *self.0.entry(canonical.packed_bits()).or_insert(0) += 1;
     }
 
     fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
@@ -384,16 +376,8 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
     }
 
     fn process_valid_kmer(&self, unpacked: Kmer) {
-        let packed = unpacked.pack();
-
-        // Optimization: check if we've already seen this exact k-mer
-        if let Some(mut count) = self.map.get_mut(&packed.packed_bits()) {
-            *count += 1;
-        } else {
-            // Not seen before - compute canonical form
-            let canonical = packed.canonical();
-            *self.map.entry(canonical.packed_bits()).or_insert(0) += 1;
-        }
+        let canonical = unpacked.pack().canonical();
+        *self.map.entry(canonical.packed_bits()).or_insert(0) += 1;
     }
 
     fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
