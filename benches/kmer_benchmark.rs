@@ -2,6 +2,7 @@ use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use kmerust::kmer::{unpack_to_bytes, Kmer, KmerLength};
 use kmerust::run::count_kmers;
+use kmerust::streaming::{count_kmers_from_sequences, count_kmers_streaming};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -56,6 +57,46 @@ fn bench_canonical(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_canonical_no_alloc(c: &mut Criterion) {
+    // Benchmark canonical when original is already smallest (no allocation needed)
+    let mut group = c.benchmark_group("Kmer::canonical_no_alloc");
+
+    for k in [5, 11, 21, 31] {
+        // "AAAA..." is already canonical (smaller than "TTTT...")
+        let seq = "A".repeat(k);
+        let bytes = Bytes::copy_from_slice(seq.as_bytes());
+
+        group.bench_with_input(BenchmarkId::from_parameter(k), &bytes, |b, bytes| {
+            b.iter(|| {
+                let kmer = Kmer::from_sub(bytes.clone()).unwrap();
+                black_box(kmer.pack().canonical())
+            })
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_canonical_needs_alloc(c: &mut Criterion) {
+    // Benchmark canonical when reverse complement is smaller (allocation needed)
+    let mut group = c.benchmark_group("Kmer::canonical_needs_alloc");
+
+    for k in [5, 11, 21, 31] {
+        // "TTTT..." needs allocation for reverse complement "AAAA..."
+        let seq = "T".repeat(k);
+        let bytes = Bytes::copy_from_slice(seq.as_bytes());
+
+        group.bench_with_input(BenchmarkId::from_parameter(k), &bytes, |b, bytes| {
+            b.iter(|| {
+                let kmer = Kmer::from_sub(bytes.clone()).unwrap();
+                black_box(kmer.pack().canonical())
+            })
+        });
+    }
+
+    group.finish();
+}
+
 fn bench_unpack(c: &mut Criterion) {
     let mut group = c.benchmark_group("unpack_to_bytes");
 
@@ -96,13 +137,60 @@ fn bench_count_kmers_small(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_count_kmers_streaming(c: &mut Criterion) {
+    let mut group = c.benchmark_group("count_kmers_streaming");
+
+    // Create a small test file
+    let mut file = NamedTempFile::new().unwrap();
+    for i in 0..100 {
+        writeln!(file, ">seq{i}").unwrap();
+        writeln!(file, "{}", "ACGTACGTACGTACGTACGTACGTACGTACGT".repeat(10)).unwrap();
+    }
+    let path = file.path().to_path_buf();
+
+    for k in [5, 11, 21] {
+        group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &k| {
+            b.iter(|| count_kmers_streaming(black_box(&path), black_box(k)))
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_count_from_sequences(c: &mut Criterion) {
+    let mut group = c.benchmark_group("count_kmers_from_sequences");
+
+    // Pre-create sequences in memory
+    let sequences: Vec<Bytes> = (0..100)
+        .map(|_| Bytes::from("ACGTACGTACGTACGTACGTACGTACGTACGT".repeat(10)))
+        .collect();
+
+    for k in [5, 11, 21] {
+        let k_len = KmerLength::new(k).unwrap();
+        group.bench_with_input(BenchmarkId::from_parameter(k), &k_len, |b, &k_len| {
+            b.iter(|| {
+                count_kmers_from_sequences(
+                    black_box(sequences.clone().into_iter()),
+                    black_box(k_len),
+                )
+            })
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_from_sub,
     bench_pack,
     bench_canonical,
+    bench_canonical_no_alloc,
+    bench_canonical_needs_alloc,
     bench_unpack,
     bench_count_kmers_small,
+    bench_count_kmers_streaming,
+    bench_count_from_sequences,
 );
 
 criterion_main!(benches);

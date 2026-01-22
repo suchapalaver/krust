@@ -11,6 +11,44 @@ use bytes::Bytes;
 
 use crate::error::KmerLengthError;
 
+// ============================================================================
+// Compile-time Lookup Tables for Performance
+// ============================================================================
+
+/// Lookup table for packing DNA bases into 2-bit representation.
+/// Maps ASCII byte values directly to their 2-bit encoding: A=0, C=1, G=2, T=3.
+/// Invalid bytes map to 0 (but should never be looked up after validation).
+const PACK_TABLE: [u64; 256] = {
+    let mut table = [0u64; 256];
+    table[b'A' as usize] = 0;
+    table[b'a' as usize] = 0;
+    table[b'C' as usize] = 1;
+    table[b'c' as usize] = 1;
+    table[b'G' as usize] = 2;
+    table[b'g' as usize] = 2;
+    table[b'T' as usize] = 3;
+    table[b't' as usize] = 3;
+    table
+};
+
+/// Lookup table for complement bases (not reverse - just the complement).
+/// A<->T, C<->G. Used for computing reverse complement without allocation.
+const COMPLEMENT_TABLE: [u8; 256] = {
+    let mut table = [0u8; 256];
+    table[b'A' as usize] = b'T';
+    table[b'a' as usize] = b'T';
+    table[b'C' as usize] = b'G';
+    table[b'c' as usize] = b'G';
+    table[b'G' as usize] = b'C';
+    table[b'g' as usize] = b'C';
+    table[b'T' as usize] = b'A';
+    table[b't' as usize] = b'A';
+    table
+};
+
+/// Lookup table for unpacking 2-bit values back to ASCII bytes.
+const UNPACK_TABLE: [u8; 4] = [b'A', b'C', b'G', b'T'];
+
 /// A validated k-mer length (1-32 inclusive).
 ///
 /// This newtype enforces that k-mer lengths are within the valid range for
@@ -304,16 +342,32 @@ impl Kmer<Packed> {
     /// assert!(!kmer.is_reverse_complement());
     /// ```
     pub fn canonical(self) -> Kmer<Canonical> {
-        let reverse_complement: Bytes = self
+        // Compare original and reverse complement without allocating.
+        // Iterate from both ends simultaneously, comparing complement(reverse[i]) with forward[i].
+        let use_reverse_complement = self
             .bytes
             .iter()
-            .rev()
-            .map(KmerByte::from)
-            .map(KmerByte::reverse_complement)
-            .map(KmerByte::into)
-            .collect();
+            .zip(
+                self.bytes
+                    .iter()
+                    .rev()
+                    .map(|&b| COMPLEMENT_TABLE[b as usize]),
+            )
+            .find_map(|(&fwd, rc)| match fwd.cmp(&rc) {
+                Ordering::Less => Some(false),   // forward is smaller, keep original
+                Ordering::Greater => Some(true), // reverse complement is smaller
+                Ordering::Equal => None,         // continue comparing
+            })
+            .unwrap_or(false); // palindrome: use original
 
-        if reverse_complement.cmp(&self.bytes) == Ordering::Less {
+        if use_reverse_complement {
+            // Only allocate if we need the reverse complement
+            let reverse_complement: Bytes = self
+                .bytes
+                .iter()
+                .rev()
+                .map(|&b| COMPLEMENT_TABLE[b as usize])
+                .collect();
             let packed_bits = pack_bytes(&reverse_complement);
             Kmer {
                 bytes: reverse_complement,
@@ -373,9 +427,11 @@ impl Kmer<Canonical> {
 pub fn unpack_to_bytes(packed_bits: u64, k: KmerLength) -> Bytes {
     let k = k.get();
     (0..k)
-        .map(|i| packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
-        .map(KmerByte::from)
-        .map(KmerByte::into)
+        .map(|i| {
+            let shift = (k - 1 - i) * 2;
+            let bits = ((packed_bits >> shift) & 0b11) as usize;
+            UNPACK_TABLE[bits]
+        })
         .collect()
 }
 
@@ -398,13 +454,15 @@ pub fn unpack_to_string(packed_bits: u64, k: KmerLength) -> String {
 // Helper Functions
 // ============================================================================
 
-/// Packs DNA bytes into a 64-bit integer.
+/// Packs DNA bytes into a 64-bit integer using lookup table.
+///
+/// Each base is encoded as 2 bits: A=00, C=01, G=10, T=11.
+/// Uses a compile-time lookup table for direct indexing instead of match statements.
+#[inline]
 fn pack_bytes(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0u64, |acc, &b| {
-        let byte: KmerByte = (&b).into();
-        let mask: u64 = byte.into();
-        (acc << 2) | mask
-    })
+    bytes
+        .iter()
+        .fold(0u64, |acc, &b| (acc << 2) | PACK_TABLE[b as usize])
 }
 
 /// A single DNA base (nucleotide).
