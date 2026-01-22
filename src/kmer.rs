@@ -481,13 +481,26 @@ pub enum KmerByte {
 }
 
 impl From<&u8> for KmerByte {
+    /// Converts a validated DNA base byte to KmerByte.
+    ///
+    /// # Safety Invariant
+    ///
+    /// This impl assumes the input byte has already been validated by
+    /// `Kmer::from_sub`. Direct use with unvalidated input will panic in debug
+    /// builds and produce undefined results in release builds.
     fn from(val: &u8) -> Self {
+        debug_assert!(
+            matches!(val, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'),
+            "KmerByte::from called with invalid base: {val:#x}"
+        );
         match val {
             b'A' | b'a' => KmerByte::A,
             b'C' | b'c' => KmerByte::C,
             b'G' | b'g' => KmerByte::G,
             b'T' | b't' => KmerByte::T,
-            _ => unreachable!(),
+            // SAFETY: Caller must ensure input is a valid DNA base.
+            // This is guaranteed when called from Kmer methods after validation.
+            _ => unreachable!("invalid base passed to KmerByte::from"),
         }
     }
 }
@@ -504,13 +517,26 @@ impl From<KmerByte> for u8 {
 }
 
 impl From<u64> for KmerByte {
+    /// Converts a 2-bit encoded value (0-3) to KmerByte.
+    ///
+    /// # Safety Invariant
+    ///
+    /// This impl assumes the input value is in range 0..=3, as produced by
+    /// masking packed bits with `& 0b11`. Values outside this range will panic
+    /// in debug builds.
     fn from(val: u64) -> Self {
+        debug_assert!(
+            val <= 3,
+            "KmerByte::from called with invalid 2-bit value: {val}"
+        );
         match val {
             0 => KmerByte::A,
             1 => KmerByte::C,
             2 => KmerByte::G,
             3 => KmerByte::T,
-            _ => unreachable!(),
+            // SAFETY: Caller must ensure input is a valid 2-bit value (0-3).
+            // This is guaranteed when called from unpack functions with masked bits.
+            _ => unreachable!("invalid 2-bit value passed to KmerByte::from"),
         }
     }
 }
@@ -527,6 +553,58 @@ impl From<KmerByte> for u64 {
 }
 
 impl KmerByte {
+    /// Fallibly converts a DNA base byte to KmerByte.
+    ///
+    /// Returns `Ok` for valid bases (A, C, G, T, case-insensitive),
+    /// or `Err` for invalid bytes.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use kmerust::kmer::KmerByte;
+    ///
+    /// assert!(KmerByte::try_from_byte(b'A').is_ok());
+    /// assert!(KmerByte::try_from_byte(b'N').is_err());
+    /// ```
+    pub fn try_from_byte(val: u8) -> Result<Self, InvalidBaseError> {
+        match val {
+            b'A' | b'a' => Ok(KmerByte::A),
+            b'C' | b'c' => Ok(KmerByte::C),
+            b'G' | b'g' => Ok(KmerByte::G),
+            b'T' | b't' => Ok(KmerByte::T),
+            _ => Err(InvalidBaseError {
+                base: val,
+                position: 0,
+            }),
+        }
+    }
+
+    /// Fallibly converts a 2-bit encoded value to KmerByte.
+    ///
+    /// Returns `Ok` for values 0-3, or `Err` for values outside that range.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use kmerust::kmer::KmerByte;
+    ///
+    /// assert!(KmerByte::try_from_bits(0).is_ok()); // A
+    /// assert!(KmerByte::try_from_bits(3).is_ok()); // T
+    /// assert!(KmerByte::try_from_bits(4).is_err());
+    /// ```
+    pub fn try_from_bits(val: u64) -> Result<Self, InvalidBaseError> {
+        match val {
+            0 => Ok(KmerByte::A),
+            1 => Ok(KmerByte::C),
+            2 => Ok(KmerByte::G),
+            3 => Ok(KmerByte::T),
+            _ => Err(InvalidBaseError {
+                base: val as u8,
+                position: 0,
+            }),
+        }
+    }
+
     pub fn reverse_complement(self) -> Self {
         match self {
             Self::A => Self::T,

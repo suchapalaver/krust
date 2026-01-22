@@ -358,7 +358,10 @@ impl StreamingKmerCounter {
 
     fn process_valid_kmer(&self, unpacked: Kmer) {
         let canonical = unpacked.pack().canonical();
-        *self.counts.entry(canonical.packed_bits()).or_insert(0) += 1;
+        self.counts
+            .entry(canonical.packed_bits())
+            .and_modify(|c| *c = c.saturating_add(1))
+            .or_insert(1);
     }
 }
 
