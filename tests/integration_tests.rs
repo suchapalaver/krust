@@ -1,24 +1,24 @@
 use std::process::Command;
 
-fn krust_cmd() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_krust"))
+fn kmerust_cmd() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_kmerust"))
 }
 
 #[test]
 fn cli_help_flag() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .arg("--help")
         .output()
         .expect("Failed to execute");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("krust"));
+    assert!(stdout.contains("kmerust"));
     assert!(stdout.contains("k-mers"));
 }
 
 #[test]
 fn cli_version_flag() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .arg("--version")
         .output()
         .expect("Failed to execute");
@@ -29,7 +29,7 @@ fn cli_version_flag() {
 
 #[test]
 fn cli_missing_args() {
-    let output = krust_cmd().output().expect("Failed to execute");
+    let output = kmerust_cmd().output().expect("Failed to execute");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("required") || stderr.contains("Usage"));
@@ -37,13 +37,13 @@ fn cli_missing_args() {
 
 #[test]
 fn cli_missing_path_arg() {
-    let output = krust_cmd().arg("5").output().expect("Failed to execute");
+    let output = kmerust_cmd().arg("5").output().expect("Failed to execute");
     assert!(!output.status.success());
 }
 
 #[test]
 fn cli_invalid_k() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["abc", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -52,7 +52,7 @@ fn cli_invalid_k() {
 
 #[test]
 fn cli_k_zero() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["0", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -61,7 +61,7 @@ fn cli_k_zero() {
 
 #[test]
 fn cli_k_too_large() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["33", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -70,7 +70,7 @@ fn cli_k_too_large() {
 
 #[test]
 fn cli_invalid_file_path() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["5", "/nonexistent/path/to/file.fa"])
         .output()
         .expect("Failed to execute");
@@ -79,7 +79,7 @@ fn cli_invalid_file_path() {
 
 #[test]
 fn cli_simple_kmer_counting() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["3", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -91,7 +91,7 @@ fn cli_simple_kmer_counting() {
 
 #[test]
 fn cli_handles_n_bases() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["3", "tests/fixtures/with_n.fa"])
         .output()
         .expect("Failed to execute");
@@ -105,7 +105,7 @@ fn cli_handles_n_bases() {
 
 #[test]
 fn cli_kmer_length_1() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["1", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -118,7 +118,7 @@ fn cli_kmer_length_1() {
 
 #[test]
 fn cli_kmer_length_32() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["32", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
@@ -128,7 +128,7 @@ fn cli_kmer_length_32() {
 
 #[test]
 fn cli_format_tsv() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["3", "tests/fixtures/simple.fa", "--format", "tsv"])
         .output()
         .expect("Failed to execute");
@@ -142,7 +142,7 @@ fn cli_format_tsv() {
 
 #[test]
 fn cli_format_json() {
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args(["3", "tests/fixtures/simple.fa", "--format", "json"])
         .output()
         .expect("Failed to execute");
@@ -157,7 +157,7 @@ fn cli_format_json() {
 #[test]
 fn cli_min_count_filter() {
     // First count without filter to get baseline
-    let output_no_filter = krust_cmd()
+    let output_no_filter = kmerust_cmd()
         .args([
             "3",
             "tests/fixtures/simple.fa",
@@ -172,7 +172,7 @@ fn cli_min_count_filter() {
         .count();
 
     // Now with a high min-count that should filter out most k-mers
-    let output_filtered = krust_cmd()
+    let output_filtered = kmerust_cmd()
         .args([
             "3",
             "tests/fixtures/simple.fa",
@@ -198,12 +198,12 @@ fn cli_min_count_filter() {
 
 #[test]
 fn cli_quiet_flag() {
-    let output_normal = krust_cmd()
+    let output_normal = kmerust_cmd()
         .args(["3", "tests/fixtures/simple.fa"])
         .output()
         .expect("Failed to execute");
 
-    let output_quiet = krust_cmd()
+    let output_quiet = kmerust_cmd()
         .args(["3", "tests/fixtures/simple.fa", "--quiet"])
         .output()
         .expect("Failed to execute");
@@ -231,7 +231,7 @@ fn cli_quiet_flag() {
 fn cli_handles_soft_masked_bases() {
     // Test that soft-masked (lowercase) bases are counted like uppercase
     // The fixture has "AAAa" which should produce 2 counts of "AAA"
-    let output = krust_cmd()
+    let output = kmerust_cmd()
         .args([
             "3",
             "tests/fixtures/soft_masked.fa",

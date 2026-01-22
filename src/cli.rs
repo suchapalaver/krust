@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 /// A fast, parallel k-mer counter for DNA sequences in FASTA files.
 #[derive(Parser, Debug)]
-#[command(name = "krust")]
+#[command(name = "kmerust")]
 #[command(version, author, about, long_about = None)]
 pub struct Args {
     /// K-mer length (1-32)

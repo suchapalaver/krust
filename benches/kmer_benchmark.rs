@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use krust::kmer::Kmer;
-use krust::run::count_kmers;
+use kmerust::kmer::Kmer;
+use kmerust::run::count_kmers;
 use std::io::Write;
 use tempfile::NamedTempFile;
 

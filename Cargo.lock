@@ -759,7 +759,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "krust"
+name = "kmerust"
 version = "0.1.0"
 dependencies = [
  "bio",

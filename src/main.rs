@@ -2,7 +2,7 @@ use std::process;
 
 use clap::Parser;
 use colored::Colorize;
-use krust::{cli::Args, run};
+use kmerust::{cli::Args, run};
 
 fn main() {
     let args = Args::parse();

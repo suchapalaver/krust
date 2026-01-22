@@ -1,4 +1,4 @@
-//! # krust
+//! # kmerust
 //!
 //! A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA files.
 //!
@@ -14,10 +14,10 @@
 //!
 //! ```bash
 //! # Count 21-mers in a FASTA file
-//! krust 21 sequences.fa > kmers.txt
+//! kmerust 21 sequences.fa > kmers.txt
 //!
 //! # Count 5-mers
-//! krust 5 sequences.fa > kmers.txt
+//! kmerust 5 sequences.fa > kmers.txt
 //! ```
 //!
 //! ## Output Format
@@ -31,7 +31,7 @@
 //! ## Library Usage
 //!
 //! ```rust,no_run
-//! use krust::run::count_kmers;
+//! use kmerust::run::count_kmers;
 //! use std::path::PathBuf;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {

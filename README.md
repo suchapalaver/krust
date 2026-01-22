@@ -1,8 +1,8 @@
-# krust
+# kmerust
 
-[![Crates.io](https://img.shields.io/crates/v/krust.svg)](https://crates.io/crates/krust)
-[![Documentation](https://docs.rs/krust/badge.svg)](https://docs.rs/krust)
-[![CI](https://github.com/suchapalaver/krust/workflows/CI/badge.svg)](https://github.com/suchapalaver/krust/actions)
+[![Crates.io](https://img.shields.io/crates/v/kmerust.svg)](https://crates.io/crates/kmerust)
+[![Documentation](https://docs.rs/kmerust/badge.svg)](https://docs.rs/kmerust)
+[![CI](https://github.com/suchapalaver/kmerust/workflows/CI/badge.svg)](https://github.com/suchapalaver/kmerust/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA files.
@@ -21,21 +21,21 @@ A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA se
 ### From crates.io
 
 ```bash
-cargo install krust
+cargo install kmerust
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/suchapalaver/krust.git
-cd krust
+git clone https://github.com/suchapalaver/kmerust.git
+cd kmerust
 cargo install --path .
 ```
 
 ## Usage
 
 ```bash
-krust <k> <path>
+kmerust <k> <path>
 ```
 
 ### Arguments
@@ -53,18 +53,18 @@ krust <k> <path>
 Count 21-mers in a FASTA file:
 
 ```bash
-krust 21 sequences.fa > kmers.txt
+kmerust 21 sequences.fa > kmers.txt
 ```
 
 Count 5-mers:
 
 ```bash
-krust 5 sequences.fa > kmers.txt
+kmerust 5 sequences.fa > kmers.txt
 ```
 
 ### FASTA Readers
 
-krust supports two FASTA readers via feature flags:
+kmerust supports two FASTA readers via feature flags:
 
 - `rust-bio` (default) - Uses the [rust-bio](https://docs.rs/bio) library
 - `needletail` - Uses the [needletail](https://docs.rs/needletail) library
@@ -95,10 +95,10 @@ AATCA
 
 ## Library Usage
 
-krust can also be used as a library:
+kmerust can also be used as a library:
 
 ```rust
-use krust::run::run;
+use kmerust::run::run;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-krust uses parallel processing to efficiently count k-mers:
+kmerust uses parallel processing to efficiently count k-mers:
 
 - Sequences are processed in parallel using rayon
 - A concurrent hash map (dashmap) allows lock-free updates
