@@ -226,3 +226,23 @@ fn cli_quiet_flag() {
         "Normal mode should produce info on stderr"
     );
 }
+
+#[test]
+fn cli_handles_soft_masked_bases() {
+    // Test that soft-masked (lowercase) bases are counted like uppercase
+    // The fixture has "AAAa" which should produce 2 counts of "AAA"
+    let output = krust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/soft_masked.fa",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should contain AAA k-mer with count of 2
+    assert!(stdout.contains("AAA\t2"));
+}

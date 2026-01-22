@@ -29,7 +29,8 @@ pub struct Kmer {
 impl Kmer {
     /// Creates a k-mer from a byte sequence.
     ///
-    /// Returns `Ok(Kmer)` if all bytes are valid DNA bases (A, C, G, T).
+    /// Returns `Ok(Kmer)` if all bytes are valid DNA bases (A, C, G, T, or lowercase a, c, g, t).
+    /// Soft-masked (lowercase) bases are converted to uppercase.
     /// Returns `Err(index)` with the index of the first invalid byte.
     pub fn from_sub(sub: Bytes) -> Result<Self, usize> {
         sub.into_iter()
@@ -37,6 +38,7 @@ impl Kmer {
             .map(|(i, byte)| {
                 Ok(match byte {
                     b'A' | b'C' | b'G' | b'T' => byte,
+                    b'a' | b'c' | b'g' | b't' => byte.to_ascii_uppercase(),
                     _ => return Err(i),
                 })
             })
@@ -118,10 +120,10 @@ pub enum KmerByte {
 impl From<&u8> for KmerByte {
     fn from(val: &u8) -> Self {
         match val {
-            b'A' => KmerByte::A,
-            b'C' => KmerByte::C,
-            b'G' => KmerByte::G,
-            b'T' => KmerByte::T,
+            b'A' | b'a' => KmerByte::A,
+            b'C' | b'c' => KmerByte::C,
+            b'G' | b'g' => KmerByte::G,
+            b'T' | b't' => KmerByte::T,
             _ => unreachable!(),
         }
     }
@@ -300,5 +302,29 @@ pub mod test {
             let kmer = Kmer::from_sub(Bytes::copy_from_slice(&[base])).unwrap();
             assert_eq!(kmer.bytes.as_ref(), &[base]);
         }
+    }
+
+    #[test]
+    fn soft_masked_bases_converted_to_uppercase() {
+        // Test that lowercase bases (soft-masked) are accepted and converted
+        let sub = b"AAAa";
+        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"AAAA""#);
+    }
+
+    #[test]
+    fn soft_masked_all_lowercase() {
+        // Test all lowercase sequence
+        let sub = b"gattaca";
+        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"GATTACA""#);
+    }
+
+    #[test]
+    fn soft_masked_mixed_case() {
+        // Test mixed case sequence
+        let sub = b"AcGt";
+        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"ACGT""#);
     }
 }
