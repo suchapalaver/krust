@@ -94,7 +94,7 @@ where
 /// # Arguments
 ///
 /// * `path` - Path to the FASTA file
-/// * `k` - K-mer length
+/// * `k` - K-mer length (must be 1-32)
 ///
 /// # Returns
 ///
@@ -102,13 +102,18 @@ where
 ///
 /// # Errors
 ///
-/// Returns an error if the file cannot be read.
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be read
 pub fn count_kmers<P>(path: P, k: usize) -> Result<HashMap<String, i32>, Box<dyn Error>>
 where
     P: AsRef<Path> + Debug,
 {
+    // Validate k-mer length upfront to provide a clear error
+    let k_len = KmerLength::new(k)?;
+
     let kmer_map = KmerMap::new().build(read(path)?, k)?;
-    Ok(kmer_map.into_hashmap(k))
+    Ok(kmer_map.into_hashmap(k_len))
 }
 
 fn output_counts(
@@ -203,16 +208,12 @@ impl KmerMap {
         }
     }
 
-    fn into_hashmap(self, k: usize) -> HashMap<String, i32> {
-        // SAFETY: k has been validated at CLI level to be 1-32
-        // In future, this function should take KmerLength directly
-        let k_len = KmerLength::new(k).expect("k should be validated before reaching here");
-
+    fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
         self.0
             .into_iter()
             .par_bridge()
             .map(|(packed_bits, count)| {
-                let kmer_string = unpack_to_string(packed_bits, k_len);
+                let kmer_string = unpack_to_string(packed_bits, k);
                 (kmer_string, count)
             })
             .collect()

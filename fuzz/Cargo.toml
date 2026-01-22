@@ -1,0 +1,39 @@
+[package]
+name = "kmerust-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+bytes = "1.11.0"
+
+[dependencies.kmerust]
+path = ".."
+
+[[bin]]
+name = "fuzz_kmer_from_sub"
+path = "fuzz_targets/fuzz_kmer_from_sub.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_pack_unpack"
+path = "fuzz_targets/fuzz_pack_unpack.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_canonical"
+path = "fuzz_targets/fuzz_canonical.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = true
