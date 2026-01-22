@@ -30,6 +30,36 @@
 //!
 //! ## Library Usage
 //!
+//! ### Builder API (Recommended)
+//!
+//! The builder API provides a fluent interface for configuring k-mer counting:
+//!
+//! ```rust,no_run
+//! use kmerust::builder::KmerCounter;
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Simple usage
+//!     let counts = KmerCounter::new()
+//!         .k(21)?
+//!         .count("sequences.fa")?;
+//!
+//!     // With options
+//!     let counts = KmerCounter::new()
+//!         .k(21)?
+//!         .min_count(5)
+//!         .count("sequences.fa")?;
+//!
+//!     for (kmer, count) in counts {
+//!         println!("{kmer}: {count}");
+//!     }
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Direct API
+//!
+//! For simpler use cases, the direct API is also available:
+//!
 //! ```rust,no_run
 //! use kmerust::run::count_kmers;
 //! use std::path::PathBuf;
@@ -44,6 +74,9 @@
 //! }
 //! ```
 
+#[cfg(feature = "async")]
+pub mod async_api;
+pub mod builder;
 pub mod cli;
 pub mod error;
 pub mod kmer;
