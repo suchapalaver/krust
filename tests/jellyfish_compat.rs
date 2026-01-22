@@ -25,7 +25,7 @@ fn jellyfish_available() -> bool {
 }
 
 /// Run jellyfish count on a file and return the k-mer counts.
-fn run_jellyfish(path: &str, k: usize) -> Result<HashMap<String, i32>, String> {
+fn run_jellyfish(path: &str, k: usize) -> Result<HashMap<String, u64>, String> {
     // Create temp file for jellyfish database
     let db_file = NamedTempFile::new().map_err(|e| e.to_string())?;
 
@@ -73,7 +73,7 @@ fn run_jellyfish(path: &str, k: usize) -> Result<HashMap<String, i32>, String> {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() == 2 {
             let kmer = parts[0].to_string();
-            let count: i32 = parts[1].parse().map_err(|e| format!("Parse error: {e}"))?;
+            let count: u64 = parts[1].parse().map_err(|e| format!("Parse error: {e}"))?;
             counts.insert(kmer, count);
         }
     }

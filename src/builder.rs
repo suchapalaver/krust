@@ -55,7 +55,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct KmerCounter {
     k: Option<KmerLength>,
-    min_count: i32,
+    min_count: u64,
     format: OutputFormat,
 }
 
@@ -150,7 +150,7 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::KmerLengthError>(())
     /// ```
     #[must_use]
-    pub fn min_count(mut self, min_count: i32) -> Self {
+    pub fn min_count(mut self, min_count: u64) -> Self {
         self.min_count = min_count;
         self
     }
@@ -195,7 +195,7 @@ impl KmerCounter {
     /// println!("Found {} unique k-mers", counts.len());
     /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn count<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
+    pub fn count<P>(&self, path: P) -> Result<HashMap<String, u64>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -244,7 +244,7 @@ impl KmerCounter {
         &self,
         path: P,
         callback: F,
-    ) -> Result<HashMap<String, i32>, BuilderError>
+    ) -> Result<HashMap<String, u64>, BuilderError>
     where
         P: AsRef<Path> + Debug,
         F: Fn(Progress) + Send + Sync + 'static,
@@ -339,7 +339,7 @@ impl KmerCounter {
                 #[derive(serde::Serialize)]
                 struct KmerCount {
                     kmer: String,
-                    count: i32,
+                    count: u64,
                 }
                 let json_data: Vec<KmerCount> = counts
                     .into_iter()
@@ -378,7 +378,7 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
     #[cfg(feature = "mmap")]
-    pub fn count_mmap<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
+    pub fn count_mmap<P>(&self, path: P) -> Result<HashMap<String, u64>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -418,7 +418,7 @@ impl KmerCounter {
     ///     .count_streaming("huge_genome.fa")?;
     /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn count_streaming<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
+    pub fn count_streaming<P>(&self, path: P) -> Result<HashMap<String, u64>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -446,7 +446,7 @@ impl KmerCounter {
 
     /// Returns the configured minimum count threshold.
     #[must_use]
-    pub fn get_min_count(&self) -> i32 {
+    pub fn get_min_count(&self) -> u64 {
         self.min_count
     }
 
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn builder_write_tsv_format() {
-        let counts: HashMap<String, i32> = [("ACGT".to_string(), 5), ("TGCA".to_string(), 3)]
+        let counts: HashMap<String, u64> = [("ACGT".to_string(), 5), ("TGCA".to_string(), 3)]
             .into_iter()
             .collect();
 

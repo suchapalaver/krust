@@ -21,7 +21,7 @@ pub struct Args {
 
     /// Minimum count threshold (k-mers below this are excluded)
     #[arg(short, long, default_value = "1")]
-    pub min_count: i32,
+    pub min_count: u64,
 
     /// Suppress informational output (only output k-mer counts)
     #[arg(short, long)]

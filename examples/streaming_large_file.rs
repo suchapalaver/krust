@@ -31,7 +31,7 @@ fn main() {
 
     let path = &args[1];
     let k: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(21);
-    let min_count: i32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let min_count: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(1);
 
     eprintln!("Counting {k}-mers in {path} (streaming mode)...");
     eprintln!("Minimum count threshold: {min_count}");

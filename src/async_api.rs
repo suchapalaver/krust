@@ -73,7 +73,7 @@ use crate::{
 pub async fn count_kmers_async<P>(
     path: P,
     k: usize,
-) -> Result<HashMap<String, i32>, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<HashMap<String, u64>, Box<dyn std::error::Error + Send + Sync>>
 where
     P: AsRef<Path> + Debug + Send + 'static,
 {
@@ -83,7 +83,7 @@ where
     let packed = task::spawn_blocking(move || count_kmers_streaming_packed(path, k_len)).await??;
 
     // Convert packed bits to strings
-    let result: HashMap<String, i32> = packed
+    let result: HashMap<String, u64> = packed
         .into_iter()
         .map(|(bits, count)| (unpack_to_string(bits, k_len), count))
         .collect();
@@ -124,7 +124,7 @@ where
 pub async fn count_kmers_packed_async<P>(
     path: P,
     k: KmerLength,
-) -> Result<HashMap<u64, i32>, Box<dyn std::error::Error + Send + Sync>>
+) -> Result<HashMap<u64, u64>, Box<dyn std::error::Error + Send + Sync>>
 where
     P: AsRef<Path> + Debug + Send + 'static,
 {
@@ -157,7 +157,7 @@ where
 #[derive(Debug, Clone)]
 pub struct AsyncKmerCounter {
     k: Option<KmerLength>,
-    min_count: i32,
+    min_count: u64,
 }
 
 impl Default for AsyncKmerCounter {
@@ -195,7 +195,7 @@ impl AsyncKmerCounter {
 
     /// Sets the minimum count threshold.
     #[must_use]
-    pub fn min_count(mut self, min_count: i32) -> Self {
+    pub fn min_count(mut self, min_count: u64) -> Self {
         self.min_count = min_count;
         self
     }
@@ -210,7 +210,7 @@ impl AsyncKmerCounter {
     pub async fn count<P>(
         &self,
         path: P,
-    ) -> Result<HashMap<String, i32>, Box<dyn std::error::Error + Send + Sync>>
+    ) -> Result<HashMap<String, u64>, Box<dyn std::error::Error + Send + Sync>>
     where
         P: AsRef<Path> + Debug + Send + 'static,
     {
@@ -243,7 +243,7 @@ impl AsyncKmerCounter {
     pub async fn count_packed<P>(
         &self,
         path: P,
-    ) -> Result<HashMap<u64, i32>, Box<dyn std::error::Error + Send + Sync>>
+    ) -> Result<HashMap<u64, u64>, Box<dyn std::error::Error + Send + Sync>>
     where
         P: AsRef<Path> + Debug + Send + 'static,
     {
@@ -274,7 +274,7 @@ impl AsyncKmerCounter {
 
     /// Returns the configured minimum count threshold.
     #[must_use]
-    pub fn get_min_count(&self) -> i32 {
+    pub fn get_min_count(&self) -> u64 {
         self.min_count
     }
 }

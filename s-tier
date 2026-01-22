@@ -1,0 +1,176 @@
+# S-Tier Rust Engineering Improvement Plan
+
+Phased implementation of improvements identified in PR review.
+
+## Phase 1: Safety & Correctness (Low Effort, High Impact) ✅ COMPLETED
+
+### 1.1 Add fallible conversions for KmerByte ✅
+
+**File:** `src/kmer.rs`
+
+Added `try_from_byte` and `try_from_bits` associated functions for defense-in-depth.
+(Note: `TryFrom` trait impls conflict with blanket impl when `From` exists, so we use
+associated functions instead.)
+
+```rust
+impl KmerByte {
+    pub fn try_from_byte(val: u8) -> Result<Self, InvalidBaseError> { ... }
+    pub fn try_from_bits(val: u64) -> Result<Self, InvalidBaseError> { ... }
+}
+```
+
+Added debug assertions to existing `From` impls to catch misuse in debug builds:
+
+```rust
+impl From<&u8> for KmerByte {
+    fn from(val: &u8) -> Self {
+        debug_assert!(
+            matches!(val, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'),
+            "KmerByte::from called with invalid base: {val:#x}"
+        );
+        // ... existing match
+    }
+}
+```
+
+### 1.2 Use saturating arithmetic for k-mer counts ✅
+
+**Files:** `src/run.rs`, `src/streaming.rs`
+
+Prevents integer overflow on extremely large datasets:
+
+```rust
+// Before
+*self.0.entry(canonical.packed_bits()).or_insert(0) += 1;
+
+// After
+self.0
+    .entry(canonical.packed_bits())
+    .and_modify(|c| *c = c.saturating_add(1))
+    .or_insert(1);
+```
+
+Updated in:
+- `KmerMap::process_valid_kmer` (src/run.rs)
+- `KmerMapWithProgress::process_valid_kmer` (src/run.rs)
+- `StreamingKmerCounter::process_valid_kmer` (src/streaming.rs)
+
+---
+
+## Phase 2: API Polish (Medium Effort) ✅ COMPLETED
+
+### 2.1 Structured builder errors ✅
+
+**Files:** `src/error.rs`, `src/builder.rs`
+
+Added `BuilderError` enum with structured error variants:
+
+```rust
+#[derive(Debug, Error)]
+pub enum BuilderError {
+    #[error("k-mer length not set; call .k() first")]
+    KmerLengthNotSet,
+
+    #[error(transparent)]
+    KmerLength(#[from] KmerLengthError),
+
+    #[error(transparent)]
+    Kmerust(#[from] KmeRustError),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("{0}")]
+    Process(String),
+}
+```
+
+Updated all `KmerCounter` methods to return `BuilderError` instead of `Box<dyn Error>`:
+- `count()` → `Result<HashMap<String, i32>, BuilderError>`
+- `count_with_progress()` → `Result<HashMap<String, i32>, BuilderError>`
+- `run()` → `Result<(), BuilderError>`
+- `count_to_writer()` → `Result<(), BuilderError>`
+- `count_mmap()` → `Result<HashMap<String, i32>, BuilderError>`
+- `count_streaming()` → `Result<HashMap<String, i32>, BuilderError>`
+
+### 2.2 Clarify streaming module documentation ✅
+
+**File:** `src/streaming.rs`
+
+Updated module docs to accurately describe memory model:
+
+- Clarified that records are batched for parallel processing
+- Explained that count map dominates memory for most datasets
+- Noted when streaming approach provides the most benefit
+
+---
+
+## Phase 3: Documentation & Observability (Low Effort) ✅ COMPLETED
+
+### 3.1 Document count overflow limitation ✅
+
+**Files:** `src/lib.rs`, `src/run.rs`
+
+Added "Limitations" section to crate docs explaining:
+- K-mer length limited to 1-32 bases (64-bit packing constraint)
+- Counts use `i32` with saturation at ~2.1 billion
+- Guidance for datasets exceeding these limits
+
+Added "Count Range" section to run module docs with same information.
+
+### 3.2 Add SAFETY comments for internal `From` impls ✅
+
+**File:** `src/kmer.rs`
+
+Already completed in Phase 1. Both `From<&u8>` and `From<u64>` for `KmerByte`
+have doc comments explaining the safety invariants and debug assertions.
+
+---
+
+## Phase 4: Future Enhancements (Optional) ✅ COMPLETED (4.1, 4.2)
+
+### 4.1 u64 counts for high-frequency k-mers ✅ COMPLETED
+
+Changed all k-mer counts from `i32` to `u64` across the entire API:
+- `HashMap<String, i32>` → `HashMap<String, u64>`
+- `HashMap<u64, i32>` → `HashMap<u64, u64>`
+- `DashMap<u64, i32>` → `DashMap<u64, u64>`
+- `min_count` parameter: `i32` → `u64`
+- Updated CLI, builder, async API, streaming API, and all tests/examples
+
+This is a breaking API change but removes any count overflow concerns.
+
+### 4.2 True streaming with bounded memory ✅ COMPLETED
+
+Added `count_kmers_sequential` function that processes records one-at-a-time
+without batching for minimum memory usage:
+
+```rust
+pub fn count_kmers_sequential<P>(path: P, k: usize) -> Result<HashMap<u64, u64>, KmeRustError>
+```
+
+Key characteristics:
+- Single-threaded processing (no batching overhead)
+- Memory = one sequence + count map
+- Best for extremely memory-constrained environments
+
+Updated module docs with comparison table of API variants.
+
+### 4.3 Bloom filter pre-filtering
+
+For memory-constrained environments, use a Bloom filter to identify likely-singleton k-mers and skip storing them.
+
+---
+
+## Verification
+
+After each phase, run:
+
+```bash
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
+cargo doc --all-features --no-deps
+```

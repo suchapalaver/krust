@@ -77,10 +77,6 @@
 //! ## Limitations
 //!
 //! - **K-mer length:** Limited to 1-32 bases (64-bit packing uses 2 bits per base)
-//! - **Count range:** K-mer counts use `i32`, supporting up to ~2.1 billion occurrences
-//!   per k-mer. Counts saturate at `i32::MAX` rather than overflowing. For datasets
-//!   where individual k-mers may appear more frequently, consider post-processing
-//!   with larger integer types.
 
 #[cfg(feature = "async")]
 pub mod async_api;

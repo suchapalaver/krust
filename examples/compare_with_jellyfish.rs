@@ -68,7 +68,7 @@ fn main() {
     }
 }
 
-fn run_jellyfish(path: &str, k: usize) -> Option<HashMap<String, i32>> {
+fn run_jellyfish(path: &str, k: usize) -> Option<HashMap<String, u64>> {
     // Check if jellyfish is available
     let check = Command::new("which").arg("jellyfish").output().ok()?;
 
@@ -116,7 +116,7 @@ fn run_jellyfish(path: &str, k: usize) -> Option<HashMap<String, i32>> {
     for line in reader.lines().map_while(Result::ok) {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() == 2 {
-            if let Ok(count) = parts[1].parse::<i32>() {
+            if let Ok(count) = parts[1].parse::<u64>() {
                 counts.insert(parts[0].to_string(), count);
             }
         }
@@ -129,7 +129,7 @@ fn run_jellyfish(path: &str, k: usize) -> Option<HashMap<String, i32>> {
     Some(counts)
 }
 
-fn compare_counts(kmerust: &HashMap<String, i32>, jellyfish: &HashMap<String, i32>) {
+fn compare_counts(kmerust: &HashMap<String, u64>, jellyfish: &HashMap<String, u64>) {
     let mut mismatches = 0;
     let mut kmerust_only = 0;
     let mut jellyfish_only = 0;
@@ -172,8 +172,8 @@ fn compare_counts(kmerust: &HashMap<String, i32>, jellyfish: &HashMap<String, i3
     }
 }
 
-fn print_summary(counts: &HashMap<String, i32>) {
-    let total: i64 = counts.values().map(|&c| c as i64).sum();
+fn print_summary(counts: &HashMap<String, u64>) {
+    let total: u64 = counts.values().sum();
     let max_count = counts.values().max().copied().unwrap_or(0);
 
     println!("\n=== K-mer Summary ===");

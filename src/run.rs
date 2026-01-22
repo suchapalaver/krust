@@ -2,13 +2,6 @@
 //!
 //! This module provides the main k-mer counting functionality, using parallel
 //! processing to efficiently count canonical k-mers across all sequences in a FASTA file.
-//!
-//! # Count Range
-//!
-//! K-mer counts use `i32`, supporting up to ~2.1 billion occurrences per k-mer.
-//! Counts saturate at `i32::MAX` rather than overflowing, so extremely high-frequency
-//! k-mers will report `2147483647` as their count. For datasets where individual k-mers
-//! may appear more frequently, consider post-processing with larger integer types.
 
 use crate::{
     cli::OutputFormat,
@@ -55,7 +48,7 @@ pub enum ProcessError {
 #[derive(Serialize)]
 struct KmerCount {
     kmer: String,
-    count: i32,
+    count: u64,
 }
 
 /// Counts k-mers in a FASTA file and writes results to stdout.
@@ -90,7 +83,7 @@ pub fn run_with_options<P>(
     path: P,
     k: usize,
     format: OutputFormat,
-    min_count: i32,
+    min_count: u64,
 ) -> Result<(), ProcessError>
 where
     P: AsRef<Path> + Debug,
@@ -117,7 +110,7 @@ where
 /// Returns an error if:
 /// - `k` is outside the valid range (1-32)
 /// - The file cannot be read
-pub fn count_kmers<P>(path: P, k: usize) -> Result<HashMap<String, i32>, Box<dyn Error>>
+pub fn count_kmers<P>(path: P, k: usize) -> Result<HashMap<String, u64>, Box<dyn Error>>
 where
     P: AsRef<Path> + Debug,
 {
@@ -190,7 +183,7 @@ pub fn count_kmers_with_progress<P, F>(
     path: P,
     k: usize,
     callback: F,
-) -> Result<HashMap<String, i32>, Box<dyn Error>>
+) -> Result<HashMap<String, u64>, Box<dyn Error>>
 where
     P: AsRef<Path> + Debug,
     F: Fn(Progress) + Send + Sync + 'static,
@@ -233,9 +226,9 @@ where
 }
 
 fn output_counts(
-    counts: HashMap<String, i32>,
+    counts: HashMap<String, u64>,
     format: OutputFormat,
-    min_count: i32,
+    min_count: u64,
 ) -> Result<(), ProcessError> {
     let mut buf = BufWriter::new(stdout());
     let filtered: Vec<_> = counts
@@ -269,7 +262,7 @@ fn output_counts(
 }
 
 /// A custom `DashMap` w/ `FxHasher`.
-type DashFx = DashMap<u64, i32, BuildHasherDefault<FxHasher>>;
+type DashFx = DashMap<u64, u64, BuildHasherDefault<FxHasher>>;
 
 struct KmerMap(DashFx);
 
@@ -319,7 +312,7 @@ impl KmerMap {
             .or_insert(1);
     }
 
-    fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
+    fn into_hashmap(self, k: KmerLength) -> HashMap<String, u64> {
         self.0
             .into_iter()
             .par_bridge()
@@ -393,7 +386,7 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
             .or_insert(1);
     }
 
-    fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
+    fn into_hashmap(self, k: KmerLength) -> HashMap<String, u64> {
         self.map
             .into_iter()
             .par_bridge()
@@ -441,7 +434,7 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[cfg(feature = "mmap")]
-pub fn count_kmers_mmap<P>(path: P, k: usize) -> Result<HashMap<String, i32>, Box<dyn Error>>
+pub fn count_kmers_mmap<P>(path: P, k: usize) -> Result<HashMap<String, u64>, Box<dyn Error>>
 where
     P: AsRef<Path> + Debug,
 {

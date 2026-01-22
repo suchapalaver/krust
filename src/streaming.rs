@@ -3,21 +3,27 @@
 //! This module provides APIs that process FASTA files without loading all sequences
 //! into memory simultaneously, making it suitable for very large genomic datasets.
 //!
+//! # API Variants
+//!
+//! | Function | Parallelism | Memory | Best For |
+//! |----------|-------------|--------|----------|
+//! | [`count_kmers_streaming`] | Parallel | Moderate | Most use cases |
+//! | [`count_kmers_sequential`] | Single-threaded | Minimal | Extreme memory constraints |
+//!
 //! # Memory Model
 //!
-//! The streaming API processes FASTA files with reduced peak memory compared to
-//! loading all sequences upfront. However, note that:
+//! **Streaming API ([`count_kmers_streaming`]):**
+//! - Records are batched for parallel processing
+//! - Provides good speed/memory balance
+//! - Memory usage: sequences + count map
 //!
-//! - **File I/O:** Records are read sequentially from disk (true streaming I/O)
-//! - **Processing:** Records are collected into batches for parallel processing,
-//!   so sequences are briefly held in memory before being processed
-//! - **Results:** The k-mer count map grows with unique canonical k-mers and
-//!   dominates memory usage for most datasets
+//! **Sequential API ([`count_kmers_sequential`]):**
+//! - Processes each record immediately as read
+//! - Lowest possible memory footprint
+//! - Memory usage: one sequence + count map
 //!
-//! For files with many unique k-mers, memory usage is dominated by the count map
-//! (one `u64` key + one `i32` value per unique k-mer). The streaming approach
-//! primarily helps when sequence data is large relative to the number of unique
-//! k-mers, or when you want to avoid loading the entire file before processing begins.
+//! For both APIs, the count map (one `u64` key + one `u64` value per unique k-mer)
+//! dominates memory usage for most datasets.
 //!
 //! # Packed Bits API
 //!
@@ -71,7 +77,7 @@ use tracing::{debug, info, info_span};
 /// println!("Found {} unique k-mers", counts.len());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn count_kmers_streaming<P>(path: P, k: usize) -> Result<HashMap<String, i32>, KmeRustError>
+pub fn count_kmers_streaming<P>(path: P, k: usize) -> Result<HashMap<String, u64>, KmeRustError>
 where
     P: AsRef<Path> + Debug,
 {
@@ -84,7 +90,7 @@ where
     #[cfg(feature = "tracing")]
     let _unpack_span = info_span!("unpack_kmers", count = packed.len()).entered();
 
-    let result: HashMap<String, i32> = packed
+    let result: HashMap<String, u64> = packed
         .into_par_iter()
         .map(|(bits, count)| (unpack_to_string(bits, k_len), count))
         .collect();
@@ -132,7 +138,7 @@ where
 pub fn count_kmers_streaming_packed<P>(
     path: P,
     k: KmerLength,
-) -> Result<HashMap<u64, i32>, KmeRustError>
+) -> Result<HashMap<u64, u64>, KmeRustError>
 where
     P: AsRef<Path> + Debug,
 {
@@ -169,7 +175,7 @@ where
 /// let counts = count_kmers_from_sequences(sequences.into_iter(), k);
 /// # Ok::<(), kmerust::error::KmerLengthError>(())
 /// ```
-pub fn count_kmers_from_sequences<I>(sequences: I, k: KmerLength) -> HashMap<u64, i32>
+pub fn count_kmers_from_sequences<I>(sequences: I, k: KmerLength) -> HashMap<u64, u64>
 where
     I: Iterator<Item = Bytes>,
 {
@@ -177,9 +183,178 @@ where
     counter.count_sequences(sequences, k)
 }
 
+/// Counts k-mers with true sequential processing for minimum memory usage.
+///
+/// Unlike [`count_kmers_streaming`] which batches sequences for parallel processing,
+/// this function processes each sequence immediately as it's read from disk.
+/// This provides the lowest possible peak memory usage at the cost of being
+/// single-threaded.
+///
+/// # When to Use
+///
+/// Use this function when:
+/// - Memory is extremely constrained
+/// - The file is very large relative to available RAM
+/// - You're processing files where individual sequences are very long
+///
+/// For most use cases, [`count_kmers_streaming`] provides a better balance of
+/// speed and memory efficiency.
+///
+/// # Arguments
+///
+/// * `path` - Path to the FASTA file
+/// * `k` - K-mer length (must be 1-32)
+///
+/// # Returns
+///
+/// A HashMap mapping packed k-mer bits to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be read or parsed
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::streaming::count_kmers_sequential;
+///
+/// let counts = count_kmers_sequential("huge_genome.fa", 21)?;
+/// println!("Found {} unique k-mers", counts.len());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn count_kmers_sequential<P>(path: P, k: usize) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    P: AsRef<Path> + Debug,
+{
+    let k_len = KmerLength::new(k)?;
+    let counter = SequentialKmerCounter::new();
+    counter.count_file(path, k_len)
+}
+
+/// A truly sequential k-mer counter with minimal memory footprint.
+///
+/// Processes sequences one at a time as they're read, without batching.
+struct SequentialKmerCounter {
+    counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>>,
+}
+
+impl SequentialKmerCounter {
+    fn new() -> Self {
+        Self {
+            counts: HashMap::with_hasher(BuildHasherDefault::<FxHasher>::default()),
+        }
+    }
+
+    #[cfg(not(feature = "needletail"))]
+    fn count_file<P>(mut self, path: P, k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        use bio::io::fasta;
+
+        let path_ref = path.as_ref();
+
+        #[cfg(feature = "tracing")]
+        let _span = info_span!("sequential_count", path = ?path_ref).entered();
+
+        // Handle gzip if the feature is enabled
+        #[cfg(feature = "gzip")]
+        let is_gzip = path_ref.extension().map(|ext| ext == "gz").unwrap_or(false);
+
+        #[cfg(feature = "gzip")]
+        if is_gzip {
+            use flate2::read::GzDecoder;
+            use std::{fs::File, io::BufReader};
+
+            let file = File::open(path_ref).map_err(|e| KmeRustError::FastaRead {
+                source: e,
+                path: path_ref.to_path_buf(),
+            })?;
+            let decoder = GzDecoder::new(file);
+            let reader = fasta::Reader::new(BufReader::new(decoder));
+
+            for result in reader.records() {
+                let record = result.map_err(|e| KmeRustError::FastaParse {
+                    details: e.to_string(),
+                })?;
+                self.process_sequence(record.seq(), k);
+            }
+
+            return Ok(self.counts.into_iter().collect());
+        }
+
+        let reader = fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+            path: path_ref.to_path_buf(),
+        })?;
+
+        // Process each record immediately as it's read - no batching
+        for result in reader.records() {
+            let record = result.map_err(|e| KmeRustError::FastaParse {
+                details: e.to_string(),
+            })?;
+            self.process_sequence(record.seq(), k);
+        }
+
+        Ok(self.counts.into_iter().collect())
+    }
+
+    #[cfg(feature = "needletail")]
+    fn count_file<P>(mut self, path: P, k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        let path_ref = path.as_ref();
+
+        #[cfg(feature = "tracing")]
+        let _span = info_span!("sequential_count", path = ?path_ref).entered();
+
+        let mut reader =
+            needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                path: path_ref.to_path_buf(),
+            })?;
+
+        // Process each record immediately as it's read - no batching
+        while let Some(result) = reader.next() {
+            let record = result.map_err(|e| KmeRustError::FastaParse {
+                details: e.to_string(),
+            })?;
+            self.process_sequence(&record.seq(), k);
+        }
+
+        Ok(self.counts.into_iter().collect())
+    }
+
+    fn process_sequence(&mut self, seq: &[u8], k: KmerLength) {
+        let k_val = k.get();
+        if seq.len() < k_val {
+            return;
+        }
+
+        let mut i = 0;
+        while i <= seq.len() - k_val {
+            let sub = Bytes::copy_from_slice(&seq[i..i + k_val]);
+
+            match Kmer::from_sub(sub) {
+                Ok(unpacked) => {
+                    let canonical = unpacked.pack().canonical();
+                    *self.counts.entry(canonical.packed_bits()).or_insert(0) += 1;
+                    i += 1;
+                }
+                Err(err) => {
+                    i += err.position + 1;
+                }
+            }
+        }
+    }
+}
+
 /// A streaming k-mer counter that processes sequences one at a time.
 struct StreamingKmerCounter {
-    counts: DashMap<u64, i32, BuildHasherDefault<FxHasher>>,
+    counts: DashMap<u64, u64, BuildHasherDefault<FxHasher>>,
 }
 
 impl StreamingKmerCounter {
@@ -190,7 +365,7 @@ impl StreamingKmerCounter {
     }
 
     #[cfg(all(not(feature = "needletail"), not(feature = "gzip")))]
-    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, i32>, KmeRustError>
+    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -232,7 +407,7 @@ impl StreamingKmerCounter {
     }
 
     #[cfg(all(not(feature = "needletail"), feature = "gzip"))]
-    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, i32>, KmeRustError>
+    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -292,7 +467,7 @@ impl StreamingKmerCounter {
     }
 
     #[cfg(feature = "needletail")]
-    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, i32>, KmeRustError>
+    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError>
     where
         P: AsRef<Path> + Debug,
     {
@@ -332,7 +507,7 @@ impl StreamingKmerCounter {
         Ok(self.counts.into_iter().collect())
     }
 
-    fn count_sequences<I>(self, sequences: I, k: KmerLength) -> HashMap<u64, i32>
+    fn count_sequences<I>(self, sequences: I, k: KmerLength) -> HashMap<u64, u64>
     where
         I: Iterator<Item = Bytes>,
     {
