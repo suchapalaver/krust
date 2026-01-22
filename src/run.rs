@@ -2,6 +2,13 @@
 //!
 //! This module provides the main k-mer counting functionality, using parallel
 //! processing to efficiently count canonical k-mers across all sequences in a FASTA file.
+//!
+//! # Count Range
+//!
+//! K-mer counts use `i32`, supporting up to ~2.1 billion occurrences per k-mer.
+//! Counts saturate at `i32::MAX` rather than overflowing, so extremely high-frequency
+//! k-mers will report `2147483647` as their count. For datasets where individual k-mers
+//! may appear more frequently, consider post-processing with larger integer types.
 
 use crate::{
     cli::OutputFormat,
