@@ -189,7 +189,11 @@ fn cli_min_count_filter() {
         .count();
 
     // Filtered output should have fewer lines
-    assert!(lines_filtered < lines_no_filter);
+    assert!(lines_no_filter > 0, "Test fixture should produce k-mers");
+    assert!(
+        lines_filtered < lines_no_filter,
+        "High min-count should filter out k-mers"
+    );
 }
 
 #[test]

@@ -216,10 +216,8 @@ impl KmerMap {
                 kmer.unpack_bits(k);
                 // SAFETY: unpack_bits only produces bytes from KmerByte (A, C, G, T),
                 // which are valid ASCII and therefore valid UTF-8
-                (
-                    String::from_utf8(kmer.bytes.to_vec()).expect("k-mer bytes are valid UTF-8"),
-                    kmer.count,
-                )
+                let kmer_string = unsafe { String::from_utf8_unchecked(kmer.bytes.to_vec()) };
+                (kmer_string, kmer.count)
             })
             .collect()
     }

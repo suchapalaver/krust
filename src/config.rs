@@ -1,12 +1,17 @@
 //! CLI configuration and validation.
 //!
-//! This module handles parsing and validating command-line arguments.
+//! This module contains legacy configuration types. For new code, use [`crate::cli::Args`] instead.
 
 use std::{error::Error, fs, path::PathBuf};
 
 use colored::Colorize;
 
 /// Configuration for k-mer counting.
+///
+/// # Deprecation
+///
+/// This struct is deprecated. Use [`crate::cli::Args`] with clap's parser instead.
+#[deprecated(since = "0.1.0", note = "Use cli::Args instead")]
 #[derive(Debug)]
 pub struct Config {
     /// The k-mer length (1-32).
@@ -15,6 +20,7 @@ pub struct Config {
     pub path: PathBuf,
 }
 
+#[allow(deprecated)]
 impl Config {
     /// Creates a new configuration from string arguments.
     ///
@@ -27,6 +33,11 @@ impl Config {
     ///
     /// Returns an error if `k` is not a valid number in range 1-32,
     /// or if the file at `path` does not exist.
+    ///
+    /// # Deprecation
+    ///
+    /// Use [`crate::cli::Args`] with clap's parser instead.
+    #[deprecated(since = "0.1.0", note = "Use cli::Args instead")]
     pub fn new(k: &str, path: &str) -> Result<Config, Box<dyn Error>> {
         let k: usize = match k.parse::<usize>() {
             Ok(k) if k > 0 && k < 33 => k,
@@ -48,6 +59,7 @@ impl Config {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use std::io::Write;
