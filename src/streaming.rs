@@ -5,17 +5,25 @@
 //!
 //! # Memory Model
 //!
-//! Unlike the standard [`count_kmers`](crate::run::count_kmers) function which loads
-//! all sequences before processing, the streaming API:
-//! - Reads sequences one at a time
-//! - Processes each sequence immediately
-//! - Only stores the k-mer count map (one entry per unique canonical k-mer)
+//! The streaming API processes FASTA files with reduced peak memory compared to
+//! loading all sequences upfront. However, note that:
+//!
+//! - **File I/O:** Records are read sequentially from disk (true streaming I/O)
+//! - **Processing:** Records are collected into batches for parallel processing,
+//!   so sequences are briefly held in memory before being processed
+//! - **Results:** The k-mer count map grows with unique canonical k-mers and
+//!   dominates memory usage for most datasets
+//!
+//! For files with many unique k-mers, memory usage is dominated by the count map
+//! (one `u64` key + one `i32` value per unique k-mer). The streaming approach
+//! primarily helps when sequence data is large relative to the number of unique
+//! k-mers, or when you want to avoid loading the entire file before processing begins.
 //!
 //! # Packed Bits API
 //!
-//! For performance-critical applications, use [`count_kmers_packed`] to get results
-//! as packed 64-bit integers instead of strings. This avoids string allocation overhead
-//! when you need to do further processing on the k-mer counts.
+//! For performance-critical applications, use [`count_kmers_streaming_packed`] to get
+//! results as packed 64-bit integers instead of strings. This avoids string allocation
+//! overhead when you need to do further processing on the k-mer counts.
 
 use std::{collections::HashMap, fmt::Debug, path::Path};
 

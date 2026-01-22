@@ -19,11 +19,11 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use std::{collections::HashMap, error::Error, fmt::Debug, io::Write, path::Path};
+use std::{collections::HashMap, fmt::Debug, io::Write, path::Path};
 
 use crate::{
     cli::OutputFormat,
-    error::KmerLengthError,
+    error::{BuilderError, KmerLengthError},
     kmer::KmerLength,
     progress::Progress,
     run::{count_kmers, count_kmers_with_progress, run_with_options},
@@ -180,10 +180,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be read
-    /// - The file cannot be parsed as FASTA
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or [`BuilderError::Kmerust`] if the file cannot be read or parsed.
     ///
     /// # Example
     ///
@@ -195,13 +193,13 @@ impl KmerCounter {
     ///     .count("genome.fa")?;
     ///
     /// println!("Found {} unique k-mers", counts.len());
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn count<P>(&self, path: P) -> Result<HashMap<String, i32>, Box<dyn Error>>
+    pub fn count<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
-        let k = self.k.ok_or("k-mer length not set; call .k() first")?;
+        let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
 
         let counts = count_kmers(&path, k.get())?;
 
@@ -223,10 +221,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be read
-    /// - The file cannot be parsed as FASTA
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or [`BuilderError::Kmerust`] if the file cannot be read or parsed.
     ///
     /// # Example
     ///
@@ -242,18 +238,18 @@ impl KmerCounter {
     ///             progress.bases_processed
     ///         );
     ///     })?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
     pub fn count_with_progress<P, F>(
         &self,
         path: P,
         callback: F,
-    ) -> Result<HashMap<String, i32>, Box<dyn Error>>
+    ) -> Result<HashMap<String, i32>, BuilderError>
     where
         P: AsRef<Path> + Debug,
         F: Fn(Progress) + Send + Sync + 'static,
     {
-        let k = self.k.ok_or("k-mer length not set; call .k() first")?;
+        let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
 
         let counts = count_kmers_with_progress(&path, k.get(), callback)?;
 
@@ -272,10 +268,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be read
-    /// - Output cannot be written
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or other errors if the file cannot be read or output cannot be written.
     ///
     /// # Example
     ///
@@ -288,13 +282,13 @@ impl KmerCounter {
     ///     .format(OutputFormat::Tsv)
     ///     .min_count(2)
     ///     .run("genome.fa")?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn run<P>(&self, path: P) -> Result<(), Box<dyn Error>>
+    pub fn run<P>(&self, path: P) -> Result<(), BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
-        let k = self.k.ok_or("k-mer length not set; call .k() first")?;
+        let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
         run_with_options(path, k.get(), self.format, self.min_count)?;
         Ok(())
     }
@@ -303,10 +297,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be read
-    /// - Output cannot be written
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or other errors if the file cannot be read or output cannot be written.
     ///
     /// # Example
     ///
@@ -323,9 +315,9 @@ impl KmerCounter {
     ///     .k(21)?
     ///     .format(OutputFormat::Tsv)
     ///     .count_to_writer("genome.fa", writer)?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn count_to_writer<P, W>(&self, path: P, mut writer: W) -> Result<(), Box<dyn Error>>
+    pub fn count_to_writer<P, W>(&self, path: P, mut writer: W) -> Result<(), BuilderError>
     where
         P: AsRef<Path> + Debug,
         W: Write,
@@ -368,10 +360,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be opened or memory-mapped
-    /// - The file cannot be parsed as FASTA
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or [`BuilderError::Kmerust`] if the file cannot be opened, memory-mapped, or parsed.
     ///
     /// # Safety
     ///
@@ -385,16 +375,16 @@ impl KmerCounter {
     /// let counts = KmerCounter::new()
     ///     .k(21)?
     ///     .count_mmap("large_genome.fa")?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
     #[cfg(feature = "mmap")]
-    pub fn count_mmap<P>(&self, path: P) -> Result<HashMap<String, i32>, Box<dyn Error>>
+    pub fn count_mmap<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
         use crate::run::count_kmers_mmap;
 
-        let k = self.k.ok_or("k-mer length not set; call .k() first")?;
+        let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
         let counts = count_kmers_mmap(&path, k.get())?;
 
         // Apply min_count filter
@@ -415,10 +405,8 @@ impl KmerCounter {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `k` has not been set
-    /// - The file cannot be read
-    /// - The file cannot be parsed as FASTA
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or [`BuilderError::Kmerust`] if the file cannot be read or parsed.
     ///
     /// # Example
     ///
@@ -428,15 +416,15 @@ impl KmerCounter {
     /// let counts = KmerCounter::new()
     ///     .k(21)?
     ///     .count_streaming("huge_genome.fa")?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # Ok::<(), kmerust::error::BuilderError>(())
     /// ```
-    pub fn count_streaming<P>(&self, path: P) -> Result<HashMap<String, i32>, Box<dyn Error>>
+    pub fn count_streaming<P>(&self, path: P) -> Result<HashMap<String, i32>, BuilderError>
     where
         P: AsRef<Path> + Debug,
     {
         use crate::streaming::count_kmers_streaming;
 
-        let k = self.k.ok_or("k-mer length not set; call .k() first")?;
+        let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
         let counts = count_kmers_streaming(&path, k.get())?;
 
         // Apply min_count filter

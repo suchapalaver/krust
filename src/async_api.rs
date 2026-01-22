@@ -91,7 +91,7 @@ where
     Ok(result)
 }
 
-/// Async version of [`count_kmers_streaming_packed`](crate::streaming::count_kmers_streaming_packed).
+/// Async version of [`crate::streaming::count_kmers_streaming_packed`].
 ///
 /// Returns packed 64-bit representations for maximum efficiency.
 ///

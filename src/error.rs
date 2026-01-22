@@ -134,6 +134,46 @@ impl From<InvalidBaseError> for KmeRustError {
     }
 }
 
+/// Errors that can occur when using the builder API.
+#[derive(Debug, Error)]
+pub enum BuilderError {
+    /// K-mer length was not set before calling a counting method.
+    #[error("k-mer length not set; call .k() first")]
+    KmerLengthNotSet,
+
+    /// Invalid k-mer length provided.
+    #[error(transparent)]
+    KmerLength(#[from] KmerLengthError),
+
+    /// Error reading or parsing input file.
+    #[error(transparent)]
+    Kmerust(#[from] KmeRustError),
+
+    /// I/O error during file operations.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// JSON serialization error.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// Error from underlying processing operations.
+    #[error("{0}")]
+    Process(String),
+}
+
+impl From<Box<dyn std::error::Error>> for BuilderError {
+    fn from(err: Box<dyn std::error::Error>) -> Self {
+        BuilderError::Process(err.to_string())
+    }
+}
+
+impl From<crate::run::ProcessError> for BuilderError {
+    fn from(err: crate::run::ProcessError) -> Self {
+        BuilderError::Process(err.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
