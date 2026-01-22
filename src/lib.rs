@@ -45,7 +45,7 @@
 //! ```
 
 pub mod cli;
-pub mod config;
+pub mod error;
 pub mod kmer;
 pub(crate) mod reader;
 pub mod run;

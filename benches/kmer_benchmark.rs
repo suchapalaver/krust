@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use kmerust::kmer::Kmer;
+use kmerust::kmer::{unpack_to_bytes, Kmer, KmerLength};
 use kmerust::run::count_kmers;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -20,19 +20,17 @@ fn bench_from_sub(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_pack_bits(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Kmer::pack_bits");
+fn bench_pack(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Kmer::pack");
 
     for k in [5, 11, 21, 31] {
         let seq = "ACGT".repeat(k / 4 + 1);
         let bytes = Bytes::copy_from_slice(&seq.as_bytes()[..k]);
-        let kmer = Kmer::from_sub(bytes).unwrap();
 
-        group.bench_with_input(BenchmarkId::from_parameter(k), &kmer, |b, kmer| {
+        group.bench_with_input(BenchmarkId::from_parameter(k), &bytes, |b, bytes| {
             b.iter(|| {
-                let mut k = kmer.clone();
-                k.pack_bits();
-                black_box(k)
+                let kmer = Kmer::from_sub(bytes.clone()).unwrap();
+                black_box(kmer.pack())
             })
         });
     }
@@ -46,13 +44,11 @@ fn bench_canonical(c: &mut Criterion) {
     for k in [5, 11, 21, 31] {
         let seq = "ACGT".repeat(k / 4 + 1);
         let bytes = Bytes::copy_from_slice(&seq.as_bytes()[..k]);
-        let kmer = Kmer::from_sub(bytes).unwrap();
 
-        group.bench_with_input(BenchmarkId::from_parameter(k), &kmer, |b, kmer| {
+        group.bench_with_input(BenchmarkId::from_parameter(k), &bytes, |b, bytes| {
             b.iter(|| {
-                let mut k = kmer.clone();
-                k.canonical();
-                black_box(k)
+                let kmer = Kmer::from_sub(bytes.clone()).unwrap();
+                black_box(kmer.pack().canonical())
             })
         });
     }
@@ -60,22 +56,21 @@ fn bench_canonical(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_unpack_bits(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Kmer::unpack_bits");
+fn bench_unpack(c: &mut Criterion) {
+    let mut group = c.benchmark_group("unpack_to_bytes");
 
     for k in [5, 11, 21, 31] {
         let seq = "ACGT".repeat(k / 4 + 1);
         let bytes = Bytes::copy_from_slice(&seq.as_bytes()[..k]);
-        let mut kmer = Kmer::from_sub(bytes).unwrap();
-        kmer.pack_bits();
+        let packed = Kmer::from_sub(bytes).unwrap().pack();
+        let packed_bits = packed.packed_bits();
+        let k_len = KmerLength::new(k).unwrap();
 
-        group.bench_with_input(BenchmarkId::from_parameter(k), &kmer, |b, kmer| {
-            b.iter(|| {
-                let mut km = kmer.clone();
-                km.unpack_bits(k);
-                black_box(km)
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(k),
+            &(packed_bits, k_len),
+            |b, &(bits, k_len)| b.iter(|| black_box(unpack_to_bytes(bits, k_len))),
+        );
     }
 
     group.finish();
@@ -104,9 +99,9 @@ fn bench_count_kmers_small(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_from_sub,
-    bench_pack_bits,
+    bench_pack,
     bench_canonical,
-    bench_unpack_bits,
+    bench_unpack,
     bench_count_kmers_small,
 );
 

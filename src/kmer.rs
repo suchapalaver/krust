@@ -9,97 +9,402 @@ use std::cmp::Ordering;
 
 use bytes::Bytes;
 
-/// A DNA k-mer with both byte and packed bit representations.
+use crate::error::KmerLengthError;
+
+/// A validated k-mer length (1-32 inclusive).
 ///
-/// K-mers are short DNA sequences of length k. This struct stores both the
-/// raw byte representation and a packed 64-bit integer representation for
-/// efficient hashing and comparison.
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub struct Kmer {
-    /// The k-mer as ASCII bytes (A, C, G, T).
-    pub bytes: Bytes,
-    /// The k-mer packed as a 64-bit integer (2 bits per base).
-    pub packed_bits: u64,
-    /// Whether this k-mer is the reverse complement of the original.
-    pub reverse_complement: bool,
-    /// The count/frequency of this k-mer.
-    pub count: i32,
+/// This newtype enforces that k-mer lengths are within the valid range for
+/// 64-bit packed representation (2 bits per base, so max 32 bases).
+///
+/// # Invariant
+///
+/// The inner value is always in [`Self::MIN`]..=[`Self::MAX`], enforced at construction.
+///
+/// # Examples
+///
+/// ```
+/// use kmerust::kmer::KmerLength;
+///
+/// let k = KmerLength::new(21).unwrap();
+/// assert_eq!(k.get(), 21);
+///
+/// // Invalid lengths are rejected
+/// assert!(KmerLength::new(0).is_err());
+/// assert!(KmerLength::new(33).is_err());
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KmerLength(u8);
+
+impl KmerLength {
+    /// Minimum valid k-mer length.
+    pub const MIN: u8 = 1;
+
+    /// Maximum valid k-mer length (limited by 64-bit packing: 2 bits × 32 = 64 bits).
+    pub const MAX: u8 = 32;
+
+    /// Creates a new `KmerLength` from a `usize` value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KmerLengthError`] if `k` is outside the valid range (1-32).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kmerust::kmer::KmerLength;
+    ///
+    /// assert!(KmerLength::new(1).is_ok());
+    /// assert!(KmerLength::new(32).is_ok());
+    /// assert!(KmerLength::new(0).is_err());
+    /// assert!(KmerLength::new(33).is_err());
+    /// ```
+    pub fn new(k: usize) -> Result<Self, KmerLengthError> {
+        if k < Self::MIN as usize || k > Self::MAX as usize {
+            return Err(KmerLengthError {
+                k,
+                min: Self::MIN,
+                max: Self::MAX,
+            });
+        }
+        Ok(Self(k as u8))
+    }
+
+    /// Creates a `KmerLength` without validation.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `k` is in the range 1..=32.
+    /// Using a value outside this range will lead to incorrect bit-packing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kmerust::kmer::KmerLength;
+    ///
+    /// // SAFETY: 21 is within the valid range 1..=32
+    /// let k = unsafe { KmerLength::new_unchecked(21) };
+    /// assert_eq!(k.get(), 21);
+    /// ```
+    #[inline]
+    pub const unsafe fn new_unchecked(k: u8) -> Self {
+        Self(k)
+    }
+
+    /// Returns the k-mer length as a `usize`.
+    #[inline]
+    pub const fn get(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the k-mer length as a `u8`.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self.0
+    }
 }
 
-impl Kmer {
+impl TryFrom<usize> for KmerLength {
+    type Error = KmerLengthError;
+
+    fn try_from(k: usize) -> Result<Self, Self::Error> {
+        Self::new(k)
+    }
+}
+
+impl From<KmerLength> for usize {
+    fn from(k: KmerLength) -> Self {
+        k.get()
+    }
+}
+
+use std::marker::PhantomData;
+
+use crate::error::InvalidBaseError;
+
+// ============================================================================
+// Type State Markers
+// ============================================================================
+
+/// Marker type: k-mer has validated bytes but is not yet packed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Unpacked;
+
+/// Marker type: k-mer bytes have been packed into a 64-bit integer.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Packed;
+
+/// Marker type: k-mer is in canonical form (lexicographically smaller of k-mer/RC).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Canonical;
+
+// ============================================================================
+// Kmer Type with Type States
+// ============================================================================
+
+/// A DNA k-mer with compile-time state tracking.
+///
+/// K-mers progress through states via method calls:
+/// - [`Kmer<Unpacked>`]: Created from validated bytes
+/// - [`Kmer<Packed>`]: Bytes packed into 64-bit representation
+/// - [`Kmer<Canonical>`]: Converted to canonical form
+///
+/// # Type Safety
+///
+/// The type state pattern ensures at compile time that operations are performed
+/// in the correct order. For example, you cannot access `packed_bits()` on an
+/// unpacked k-mer.
+///
+/// # Examples
+///
+/// ```
+/// use bytes::Bytes;
+/// use kmerust::kmer::Kmer;
+///
+/// let unpacked = Kmer::from_sub(Bytes::from_static(b"GATTACA")).unwrap();
+/// let packed = unpacked.pack();
+/// let canonical = packed.canonical();
+///
+/// // Access the canonical packed bits for use as a hash key
+/// let bits = canonical.packed_bits();
+/// ```
+#[derive(Debug, Clone)]
+pub struct Kmer<S = Unpacked> {
+    bytes: Bytes,
+    packed_bits: u64,
+    is_reverse_complement: bool,
+    _state: PhantomData<S>,
+}
+
+impl Default for Kmer<Unpacked> {
+    fn default() -> Self {
+        Self {
+            bytes: Bytes::new(),
+            packed_bits: 0,
+            is_reverse_complement: false,
+            _state: PhantomData,
+        }
+    }
+}
+
+impl<S> Kmer<S> {
+    /// Returns the k-mer bytes.
+    #[inline]
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
+    }
+}
+
+impl Kmer<Unpacked> {
     /// Creates a k-mer from a byte sequence.
     ///
-    /// Returns `Ok(Kmer)` if all bytes are valid DNA bases (A, C, G, T, or lowercase a, c, g, t).
+    /// Validates that all bytes are valid DNA bases (A, C, G, T, or lowercase).
     /// Soft-masked (lowercase) bases are converted to uppercase.
-    /// Returns `Err(index)` with the index of the first invalid byte.
-    pub fn from_sub(sub: Bytes) -> Result<Self, usize> {
-        sub.into_iter()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidBaseError`] with the position and value of the first invalid byte.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bytes::Bytes;
+    /// use kmerust::kmer::Kmer;
+    ///
+    /// let kmer = Kmer::from_sub(Bytes::from_static(b"GATTACA")).unwrap();
+    /// assert_eq!(kmer.bytes().as_ref(), b"GATTACA");
+    ///
+    /// // Lowercase bases are normalized
+    /// let kmer = Kmer::from_sub(Bytes::from_static(b"gattaca")).unwrap();
+    /// assert_eq!(kmer.bytes().as_ref(), b"GATTACA");
+    ///
+    /// // Invalid bases return an error
+    /// let result = Kmer::from_sub(Bytes::from_static(b"GANTACA"));
+    /// assert!(result.is_err());
+    /// ```
+    pub fn from_sub(sub: Bytes) -> Result<Self, InvalidBaseError> {
+        let normalized: Result<Vec<u8>, InvalidBaseError> = sub
+            .iter()
             .enumerate()
-            .map(|(i, byte)| {
-                Ok(match byte {
-                    b'A' | b'C' | b'G' | b'T' => byte,
-                    b'a' | b'c' | b'g' | b't' => byte.to_ascii_uppercase(),
-                    _ => return Err(i),
-                })
+            .map(|(i, &byte)| match byte {
+                b'A' | b'C' | b'G' | b'T' => Ok(byte),
+                b'a' | b'c' | b'g' | b't' => Ok(byte.to_ascii_uppercase()),
+                _ => Err(InvalidBaseError {
+                    base: byte,
+                    position: i,
+                }),
             })
-            .collect()
+            .collect();
+
+        Ok(Self {
+            bytes: Bytes::from(normalized?),
+            packed_bits: 0,
+            is_reverse_complement: false,
+            _state: PhantomData,
+        })
     }
 
     /// Packs the k-mer bytes into a 64-bit integer.
     ///
     /// Each base is encoded as 2 bits: A=00, C=01, G=10, T=11.
-    /// This allows k-mers up to length 32 to fit in a u64.
-    pub fn pack_bits(&mut self) {
-        for elem in self.bytes.iter() {
-            self.packed_bits <<= 2;
-            let byte: KmerByte = elem.into();
-            let mask: u64 = byte.into();
-            self.packed_bits |= mask
+    /// Consumes the unpacked k-mer and returns a packed k-mer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bytes::Bytes;
+    /// use kmerust::kmer::Kmer;
+    ///
+    /// let unpacked = Kmer::from_sub(Bytes::from_static(b"ACGT")).unwrap();
+    /// let packed = unpacked.pack();
+    /// // ACGT = 00 01 10 11 = 0b00011011 = 27
+    /// assert_eq!(packed.packed_bits(), 0b00_01_10_11);
+    /// ```
+    pub fn pack(self) -> Kmer<Packed> {
+        let packed_bits = pack_bytes(&self.bytes);
+        Kmer {
+            bytes: self.bytes,
+            packed_bits,
+            is_reverse_complement: false,
+            _state: PhantomData,
         }
+    }
+}
+
+impl Kmer<Packed> {
+    /// Returns the packed 64-bit representation.
+    #[inline]
+    pub fn packed_bits(&self) -> u64 {
+        self.packed_bits
     }
 
     /// Converts the k-mer to its canonical form.
     ///
     /// The canonical form is the lexicographically smaller of the k-mer
-    /// and its reverse complement. Sets `reverse_complement` to true if
-    /// the reverse complement was chosen.
-    pub fn canonical(&mut self) {
-        match self
+    /// and its reverse complement. This ensures that a k-mer and its
+    /// reverse complement are treated as equivalent.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bytes::Bytes;
+    /// use kmerust::kmer::Kmer;
+    ///
+    /// // TTT -> AAA (reverse complement), AAA is smaller
+    /// let kmer = Kmer::from_sub(Bytes::from_static(b"TTT")).unwrap()
+    ///     .pack()
+    ///     .canonical();
+    /// assert_eq!(kmer.bytes().as_ref(), b"AAA");
+    /// assert!(kmer.is_reverse_complement());
+    ///
+    /// // AAA is already canonical
+    /// let kmer = Kmer::from_sub(Bytes::from_static(b"AAA")).unwrap()
+    ///     .pack()
+    ///     .canonical();
+    /// assert_eq!(kmer.bytes().as_ref(), b"AAA");
+    /// assert!(!kmer.is_reverse_complement());
+    /// ```
+    pub fn canonical(self) -> Kmer<Canonical> {
+        let reverse_complement: Bytes = self
             .bytes
             .iter()
             .rev()
             .map(KmerByte::from)
             .map(KmerByte::reverse_complement)
             .map(KmerByte::into)
-            .collect::<Bytes>()
-        {
-            reverse_complement if reverse_complement.cmp(&self.bytes) == Ordering::Less => {
-                self.bytes = reverse_complement;
-                self.reverse_complement = true
-            }
-            _ => (),
-        }
-    }
+            .collect();
 
-    /// Unpacks a 64-bit integer back into k-mer bytes.
-    ///
-    /// The `k` parameter specifies the k-mer length to extract.
-    pub fn unpack_bits(&mut self, k: usize) {
-        self.bytes = (0..k)
-            .map(|i| self.packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
-            .map(KmerByte::from)
-            .map(KmerByte::into)
-            .collect()
+        if reverse_complement.cmp(&self.bytes) == Ordering::Less {
+            let packed_bits = pack_bytes(&reverse_complement);
+            Kmer {
+                bytes: reverse_complement,
+                packed_bits,
+                is_reverse_complement: true,
+                _state: PhantomData,
+            }
+        } else {
+            Kmer {
+                bytes: self.bytes,
+                packed_bits: self.packed_bits,
+                is_reverse_complement: false,
+                _state: PhantomData,
+            }
+        }
     }
 }
 
-impl FromIterator<u8> for Kmer {
-    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
-        Self {
-            bytes: iter.into_iter().collect(),
-            ..Default::default()
-        }
+impl Kmer<Canonical> {
+    /// Returns the canonical packed 64-bit representation.
+    #[inline]
+    pub fn packed_bits(&self) -> u64 {
+        self.packed_bits
     }
+
+    /// Returns whether this k-mer was converted to its reverse complement.
+    #[inline]
+    pub fn is_reverse_complement(&self) -> bool {
+        self.is_reverse_complement
+    }
+}
+
+// ============================================================================
+// Unpacking: Create Kmer from packed bits
+// ============================================================================
+
+/// Unpacks a 64-bit integer into k-mer bytes.
+///
+/// This is the inverse of packing: given packed bits and a k-mer length,
+/// reconstructs the DNA sequence.
+///
+/// # Arguments
+///
+/// * `packed_bits` - The packed 64-bit representation
+/// * `k` - The k-mer length
+///
+/// # Examples
+///
+/// ```
+/// use kmerust::kmer::{unpack_to_bytes, KmerLength};
+///
+/// let k = KmerLength::new(4).unwrap();
+/// // 0b00011011 = ACGT
+/// let bytes = unpack_to_bytes(0b00_01_10_11, k);
+/// assert_eq!(bytes.as_ref(), b"ACGT");
+/// ```
+pub fn unpack_to_bytes(packed_bits: u64, k: KmerLength) -> Bytes {
+    let k = k.get();
+    (0..k)
+        .map(|i| packed_bits << ((i * 2) + 64 - (k * 2)) >> 62)
+        .map(KmerByte::from)
+        .map(KmerByte::into)
+        .collect()
+}
+
+/// Unpacks packed bits to a String.
+///
+/// Convenience function for when a String representation is needed.
+///
+/// # Safety Note
+///
+/// This function uses `String::from_utf8_unchecked` internally because
+/// the unpacking process only produces valid ASCII bytes (A, C, G, T).
+pub fn unpack_to_string(packed_bits: u64, k: KmerLength) -> String {
+    let bytes = unpack_to_bytes(packed_bits, k);
+    // SAFETY: unpack_to_bytes only produces bytes from KmerByte (A, C, G, T),
+    // which are valid ASCII and therefore valid UTF-8
+    unsafe { String::from_utf8_unchecked(bytes.to_vec()) }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Packs DNA bytes into a 64-bit integer.
+fn pack_bytes(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0u64, |acc, &b| {
+        let byte: KmerByte = (&b).into();
+        let mask: u64 = byte.into();
+        (acc << 2) | mask
+    })
 }
 
 /// A single DNA base (nucleotide).
@@ -181,93 +486,100 @@ pub mod test {
     #[test]
     fn bytes_from_valid_substring() {
         let sub = b"GATTACA";
-        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"GATTACA""#);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", kmer.bytes()), @r#"b"GATTACA""#);
     }
 
     #[test]
     fn from_substring_returns_err_for_invalid_substring() {
         let sub = b"N";
-        let k = Kmer::from_sub(Bytes::copy_from_slice(sub));
-        assert!(k.is_err());
+        let result = Kmer::from_sub(Bytes::copy_from_slice(sub));
+        assert!(result.is_err());
     }
 
     #[test]
-    fn from_sub_finds_invalid_byte_index() {
-        let dna = "NACNN".as_bytes();
-        let res = Kmer::from_sub(Bytes::copy_from_slice(dna));
-        assert_eq!(Err(0), res);
+    fn from_sub_finds_invalid_byte_position() {
+        let test_cases = [
+            ("NACNN", 0, b'N'),
+            ("ANCNG", 1, b'N'),
+            ("AANTG", 2, b'N'),
+            ("CCCNG", 3, b'N'),
+            ("AACTN", 4, b'N'),
+        ];
 
-        let dna = "ANCNG".as_bytes();
-        let res = Kmer::from_sub(Bytes::copy_from_slice(dna));
-        assert_eq!(Err(1), res);
-
-        let dna = "AANTG".as_bytes();
-        let res = Kmer::from_sub(Bytes::copy_from_slice(dna));
-        assert_eq!(Err(2), res);
-
-        let dna = "CCCNG".as_bytes();
-        let res = Kmer::from_sub(Bytes::copy_from_slice(dna));
-        assert_eq!(Err(3), res);
-
-        let dna = "AACTN".as_bytes();
-        let res = Kmer::from_sub(Bytes::copy_from_slice(dna));
-        assert_eq!(Err(4), res);
+        for (dna, expected_pos, expected_base) in test_cases {
+            let res = Kmer::from_sub(Bytes::copy_from_slice(dna.as_bytes()));
+            let err = res.unwrap_err();
+            assert_eq!(err.position, expected_pos, "for sequence {dna}");
+            assert_eq!(err.base, expected_base, "for sequence {dna}");
+        }
     }
 
     #[test]
     fn pack_unpack_roundtrip() {
         let sequences = ["ACGT", "AAAA", "TTTT", "CCCC", "GGGG", "GATTACA"];
         for seq in sequences {
-            let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(seq.as_bytes())).unwrap();
-            kmer.pack_bits();
-            kmer.unpack_bits(seq.len());
-            assert_eq!(kmer.bytes.as_ref(), seq.as_bytes());
+            let kmer = Kmer::from_sub(Bytes::copy_from_slice(seq.as_bytes())).unwrap();
+            let packed = kmer.pack();
+            let k = KmerLength::new(seq.len()).unwrap();
+            let unpacked = unpack_to_bytes(packed.packed_bits(), k);
+            assert_eq!(unpacked.as_ref(), seq.as_bytes());
         }
     }
 
     #[test]
     fn pack_unpack_roundtrip_various_lengths() {
-        for k in 1..=32 {
-            let seq = "A".repeat(k);
-            let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(seq.as_bytes())).unwrap();
-            kmer.pack_bits();
-            kmer.unpack_bits(k);
-            assert_eq!(kmer.bytes.as_ref(), seq.as_bytes());
+        for k_val in 1..=32 {
+            let seq = "A".repeat(k_val);
+            let kmer = Kmer::from_sub(Bytes::copy_from_slice(seq.as_bytes())).unwrap();
+            let packed = kmer.pack();
+            let k = KmerLength::new(k_val).unwrap();
+            let unpacked = unpack_to_bytes(packed.packed_bits(), k);
+            assert_eq!(unpacked.as_ref(), seq.as_bytes());
         }
     }
 
     #[test]
     fn canonical_selects_lexicographically_smaller() {
         // ACGT and ACGT (reverse complement) - ACGT is palindromic
-        let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(b"ACGT")).unwrap();
-        kmer.canonical();
-        assert_eq!(kmer.bytes.as_ref(), b"ACGT");
-        assert!(!kmer.reverse_complement);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(b"ACGT"))
+            .unwrap()
+            .pack()
+            .canonical();
+        assert_eq!(kmer.bytes().as_ref(), b"ACGT");
+        assert!(!kmer.is_reverse_complement());
 
         // AAA -> TTT reverse complement, AAA is smaller
-        let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(b"AAA")).unwrap();
-        kmer.canonical();
-        assert_eq!(kmer.bytes.as_ref(), b"AAA");
-        assert!(!kmer.reverse_complement);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(b"AAA"))
+            .unwrap()
+            .pack()
+            .canonical();
+        assert_eq!(kmer.bytes().as_ref(), b"AAA");
+        assert!(!kmer.is_reverse_complement());
 
         // TTT -> AAA reverse complement, AAA is smaller
-        let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(b"TTT")).unwrap();
-        kmer.canonical();
-        assert_eq!(kmer.bytes.as_ref(), b"AAA");
-        assert!(kmer.reverse_complement);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(b"TTT"))
+            .unwrap()
+            .pack()
+            .canonical();
+        assert_eq!(kmer.bytes().as_ref(), b"AAA");
+        assert!(kmer.is_reverse_complement());
 
         // GATTACA -> TGTAATC reverse complement, GATTACA is smaller
-        let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(b"GATTACA")).unwrap();
-        kmer.canonical();
-        assert_eq!(kmer.bytes.as_ref(), b"GATTACA");
-        assert!(!kmer.reverse_complement);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(b"GATTACA"))
+            .unwrap()
+            .pack()
+            .canonical();
+        assert_eq!(kmer.bytes().as_ref(), b"GATTACA");
+        assert!(!kmer.is_reverse_complement());
 
         // TGTAATC -> GATTACA reverse complement, GATTACA is smaller
-        let mut kmer = Kmer::from_sub(Bytes::copy_from_slice(b"TGTAATC")).unwrap();
-        kmer.canonical();
-        assert_eq!(kmer.bytes.as_ref(), b"GATTACA");
-        assert!(kmer.reverse_complement);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(b"TGTAATC"))
+            .unwrap()
+            .pack()
+            .canonical();
+        assert_eq!(kmer.bytes().as_ref(), b"GATTACA");
+        assert!(kmer.is_reverse_complement());
     }
 
     #[test]
@@ -293,14 +605,14 @@ pub mod test {
     #[test]
     fn empty_kmer() {
         let kmer = Kmer::from_sub(Bytes::new()).unwrap();
-        assert!(kmer.bytes.is_empty());
+        assert!(kmer.bytes().is_empty());
     }
 
     #[test]
     fn single_base_kmers() {
         for base in [b'A', b'C', b'G', b'T'] {
             let kmer = Kmer::from_sub(Bytes::copy_from_slice(&[base])).unwrap();
-            assert_eq!(kmer.bytes.as_ref(), &[base]);
+            assert_eq!(kmer.bytes().as_ref(), &[base]);
         }
     }
 
@@ -308,23 +620,90 @@ pub mod test {
     fn soft_masked_bases_converted_to_uppercase() {
         // Test that lowercase bases (soft-masked) are accepted and converted
         let sub = b"AAAa";
-        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"AAAA""#);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", kmer.bytes()), @r#"b"AAAA""#);
     }
 
     #[test]
     fn soft_masked_all_lowercase() {
         // Test all lowercase sequence
         let sub = b"gattaca";
-        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"GATTACA""#);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", kmer.bytes()), @r#"b"GATTACA""#);
     }
 
     #[test]
     fn soft_masked_mixed_case() {
         // Test mixed case sequence
         let sub = b"AcGt";
-        let k = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
-        insta::assert_snapshot!(format!("{:?}", k.bytes), @r#"b"ACGT""#);
+        let kmer = Kmer::from_sub(Bytes::copy_from_slice(sub)).unwrap();
+        insta::assert_snapshot!(format!("{:?}", kmer.bytes()), @r#"b"ACGT""#);
+    }
+
+    #[test]
+    fn kmer_length_valid_range() {
+        for k in 1..=32 {
+            let result = KmerLength::new(k);
+            assert!(result.is_ok(), "k={k} should be valid");
+            assert_eq!(result.unwrap().get(), k);
+        }
+    }
+
+    #[test]
+    fn kmer_length_rejects_zero() {
+        let result = KmerLength::new(0);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.k, 0);
+        assert_eq!(err.min, KmerLength::MIN);
+        assert_eq!(err.max, KmerLength::MAX);
+    }
+
+    #[test]
+    fn kmer_length_rejects_too_large() {
+        for k in [33, 64, 100, 1000] {
+            let result = KmerLength::new(k);
+            assert!(result.is_err(), "k={k} should be invalid");
+        }
+    }
+
+    #[test]
+    fn kmer_length_try_from() {
+        let k: Result<KmerLength, _> = 21usize.try_into();
+        assert!(k.is_ok());
+        assert_eq!(k.unwrap().get(), 21);
+    }
+
+    #[test]
+    fn kmer_length_into_usize() {
+        let k = KmerLength::new(21).unwrap();
+        let n: usize = k.into();
+        assert_eq!(n, 21);
+    }
+
+    #[test]
+    fn kmer_length_as_u8() {
+        let k = KmerLength::new(21).unwrap();
+        assert_eq!(k.as_u8(), 21);
+    }
+
+    #[test]
+    fn unpack_to_string_works() {
+        let k = KmerLength::new(4).unwrap();
+        // ACGT = 00 01 10 11 = 27
+        let s = unpack_to_string(0b00_01_10_11, k);
+        assert_eq!(s, "ACGT");
+    }
+
+    #[test]
+    fn type_state_flow() {
+        // Demonstrate the type-state flow
+        let unpacked: Kmer<Unpacked> = Kmer::from_sub(Bytes::from_static(b"GATTACA")).unwrap();
+        let packed: Kmer<Packed> = unpacked.pack();
+        let canonical: Kmer<Canonical> = packed.canonical();
+
+        // Can access packed_bits on both Packed and Canonical
+        assert!(canonical.packed_bits() > 0);
+        assert!(!canonical.is_reverse_complement());
     }
 }

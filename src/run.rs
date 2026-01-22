@@ -3,7 +3,11 @@
 //! This module provides the main k-mer counting functionality, using parallel
 //! processing to efficiently count canonical k-mers across all sequences in a FASTA file.
 
-use super::{cli::OutputFormat, kmer::Kmer, reader::read};
+use crate::{
+    cli::OutputFormat,
+    kmer::{unpack_to_string, Kmer, KmerLength},
+    reader::read,
+};
 use bytes::Bytes;
 use dashmap::DashMap;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
@@ -160,12 +164,12 @@ impl KmerMap {
         sequences: rayon::vec::IntoIter<Bytes>,
         k: usize,
     ) -> Result<Self, Box<dyn Error>> {
-        sequences.for_each(|seq| self.process_sequence(&seq, &k));
+        sequences.for_each(|seq| self.process_sequence(&seq, k));
         Ok(self)
     }
 
-    fn process_sequence(&self, seq: &Bytes, k: &usize) {
-        if seq.len() < *k {
+    fn process_sequence(&self, seq: &Bytes, k: usize) {
+        if seq.len() < k {
             return;
         }
         let mut i = 0;
@@ -174,50 +178,42 @@ impl KmerMap {
             let sub = seq.slice(i..i + k);
 
             match Kmer::from_sub(sub) {
-                Ok(mut kmer) => self.process_valid_bytes(&mut kmer),
-                Err(invalid_byte_index) => i += invalid_byte_index,
+                Ok(unpacked) => {
+                    self.process_valid_kmer(unpacked);
+                    i += 1;
+                }
+                Err(err) => {
+                    // Skip past the invalid base
+                    i += err.position + 1;
+                }
             }
-
-            i += 1
         }
     }
 
-    fn process_valid_bytes(&self, kmer: &mut Kmer) {
-        kmer.pack_bits();
+    fn process_valid_kmer(&self, unpacked: Kmer) {
+        let packed = unpacked.pack();
 
-        if let Some(mut count) = self.0.get_mut(&kmer.packed_bits) {
+        // Optimization: check if we've already seen this exact k-mer
+        if let Some(mut count) = self.0.get_mut(&packed.packed_bits()) {
             *count += 1;
         } else {
-            kmer.canonical();
-
-            if kmer.reverse_complement {
-                kmer.packed_bits = Default::default();
-                kmer.pack_bits();
-            }
-
-            self.log(kmer);
+            // Not seen before - compute canonical form
+            let canonical = packed.canonical();
+            *self.0.entry(canonical.packed_bits()).or_insert(0) += 1;
         }
-    }
-
-    fn log(&self, kmer: &Kmer) {
-        *self.0.entry(kmer.packed_bits).or_insert(0) += 1
     }
 
     fn into_hashmap(self, k: usize) -> HashMap<String, i32> {
+        // SAFETY: k has been validated at CLI level to be 1-32
+        // In future, this function should take KmerLength directly
+        let k_len = KmerLength::new(k).expect("k should be validated before reaching here");
+
         self.0
             .into_iter()
             .par_bridge()
-            .map(|(packed_bits, count)| Kmer {
-                packed_bits,
-                count,
-                ..Default::default()
-            })
-            .map(|mut kmer| {
-                kmer.unpack_bits(k);
-                // SAFETY: unpack_bits only produces bytes from KmerByte (A, C, G, T),
-                // which are valid ASCII and therefore valid UTF-8
-                let kmer_string = unsafe { String::from_utf8_unchecked(kmer.bytes.to_vec()) };
-                (kmer_string, kmer.count)
+            .map(|(packed_bits, count)| {
+                let kmer_string = unpack_to_string(packed_bits, k_len);
+                (kmer_string, count)
             })
             .collect()
     }
