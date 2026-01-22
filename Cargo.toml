@@ -26,11 +26,18 @@ rayon = "1.11"
 rustc-hash = "2.1"
 thiserror = "2.0"
 
+# Optional dependencies for production features
+flate2 = { version = "1.0", optional = true }
+memmap2 = { version = "0.9", optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 insta = "1.46"
 proptest = "1.6"
 tempfile = "3.15"
+tracing-test = "0.2"
 
 [[bench]]
 name = "kmer_benchmark"
@@ -42,3 +49,11 @@ default = ["rust-bio"]
 needletail = []
 # Use rust-bio fasta reader
 rust-bio = []
+# Gzip compressed input support
+gzip = ["dep:flate2"]
+# Memory-mapped I/O for large files
+mmap = ["dep:memmap2"]
+# Tracing/logging instrumentation
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
+# All production features
+production = ["gzip", "mmap", "tracing"]

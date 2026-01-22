@@ -47,6 +47,9 @@
 pub mod cli;
 pub mod error;
 pub mod kmer;
+#[cfg(feature = "mmap")]
+pub mod mmap;
+pub mod progress;
 pub(crate) mod reader;
 pub mod run;
 pub mod streaming;

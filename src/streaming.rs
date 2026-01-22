@@ -30,6 +30,9 @@ use crate::{
     kmer::{unpack_to_string, Kmer, KmerLength},
 };
 
+#[cfg(feature = "tracing")]
+use tracing::{debug, info, info_span};
+
 /// Counts k-mers in a FASTA file using streaming I/O.
 ///
 /// Processes sequences one at a time without loading the entire file into memory.
@@ -64,13 +67,27 @@ pub fn count_kmers_streaming<P>(path: P, k: usize) -> Result<HashMap<String, i32
 where
     P: AsRef<Path> + Debug,
 {
+    #[cfg(feature = "tracing")]
+    info!(k = k, path = ?path, "Starting streaming k-mer counting");
+
     let k_len = KmerLength::new(k)?;
     let packed = count_kmers_streaming_packed(&path, k_len)?;
 
-    Ok(packed
+    #[cfg(feature = "tracing")]
+    let _unpack_span = info_span!("unpack_kmers", count = packed.len()).entered();
+
+    let result: HashMap<String, i32> = packed
         .into_par_iter()
         .map(|(bits, count)| (unpack_to_string(bits, k_len), count))
-        .collect())
+        .collect();
+
+    #[cfg(feature = "tracing")]
+    info!(
+        unique_kmers = result.len(),
+        "Streaming k-mer counting complete"
+    );
+
+    Ok(result)
 }
 
 /// Counts k-mers and returns packed 64-bit representations.
@@ -164,7 +181,7 @@ impl StreamingKmerCounter {
         }
     }
 
-    #[cfg(not(feature = "needletail"))]
+    #[cfg(all(not(feature = "needletail"), not(feature = "gzip")))]
     fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, i32>, KmeRustError>
     where
         P: AsRef<Path> + Debug,
@@ -172,6 +189,10 @@ impl StreamingKmerCounter {
         use bio::io::fasta;
 
         let path_ref = path.as_ref();
+
+        #[cfg(feature = "tracing")]
+        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
+
         let reader = fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
             source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
             path: path_ref.to_path_buf(),
@@ -184,6 +205,75 @@ impl StreamingKmerCounter {
             .map_err(|e| KmeRustError::FastaParse {
                 details: e.to_string(),
             })?;
+
+        #[cfg(feature = "tracing")]
+        {
+            drop(_read_span);
+            debug!(sequences = records.len(), "Read sequences from file");
+        }
+
+        #[cfg(feature = "tracing")]
+        let _process_span = info_span!("process_sequences", count = records.len()).entered();
+
+        records.par_iter().for_each(|record| {
+            let seq = Bytes::copy_from_slice(record.seq());
+            self.process_sequence(&seq, k);
+        });
+
+        Ok(self.counts.into_iter().collect())
+    }
+
+    #[cfg(all(not(feature = "needletail"), feature = "gzip"))]
+    fn count_file<P>(self, path: P, k: KmerLength) -> Result<HashMap<u64, i32>, KmeRustError>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        use bio::io::fasta;
+        use flate2::read::GzDecoder;
+        use std::{fs::File, io::BufReader};
+
+        let path_ref = path.as_ref();
+
+        #[cfg(feature = "tracing")]
+        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
+
+        let is_gzip = path_ref.extension().map(|ext| ext == "gz").unwrap_or(false);
+
+        let records: Vec<bio::io::fasta::Record> = if is_gzip {
+            let file = File::open(path_ref).map_err(|e| KmeRustError::FastaRead {
+                source: e,
+                path: path_ref.to_path_buf(),
+            })?;
+            let decoder = GzDecoder::new(file);
+            let reader = fasta::Reader::new(BufReader::new(decoder));
+            reader
+                .records()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| KmeRustError::FastaParse {
+                    details: e.to_string(),
+                })?
+        } else {
+            let reader =
+                fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+                    source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                    path: path_ref.to_path_buf(),
+                })?;
+            reader
+                .records()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| KmeRustError::FastaParse {
+                    details: e.to_string(),
+                })?
+        };
+
+        #[cfg(feature = "tracing")]
+        {
+            drop(_read_span);
+            debug!(sequences = records.len(), "Read sequences from file");
+        }
+
+        #[cfg(feature = "tracing")]
+        let _process_span = info_span!("process_sequences", count = records.len()).entered();
 
         records.par_iter().for_each(|record| {
             let seq = Bytes::copy_from_slice(record.seq());
@@ -199,6 +289,10 @@ impl StreamingKmerCounter {
         P: AsRef<Path> + Debug,
     {
         let path_ref = path.as_ref();
+
+        #[cfg(feature = "tracing")]
+        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
+
         let mut reader =
             needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::FastaRead {
                 source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
@@ -213,6 +307,15 @@ impl StreamingKmerCounter {
             })?;
             sequences.push(Bytes::copy_from_slice(&record.seq()));
         }
+
+        #[cfg(feature = "tracing")]
+        {
+            drop(_read_span);
+            debug!(sequences = sequences.len(), "Read sequences from file");
+        }
+
+        #[cfg(feature = "tracing")]
+        let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
             self.process_sequence(seq, k);

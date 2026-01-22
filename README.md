@@ -75,6 +75,36 @@ To use needletail instead:
 cargo run --release --no-default-features --features needletail -- 21 sequences.fa
 ```
 
+### Production Features
+
+Enable production features for additional capabilities:
+
+```bash
+cargo build --release --features production
+```
+
+Or enable individual features:
+
+- `gzip` - Read gzip-compressed FASTA files (`.fa.gz`)
+- `mmap` - Memory-mapped I/O for large files
+- `tracing` - Structured logging and diagnostics
+
+#### Gzip Compressed Input
+
+With the `gzip` feature, kmerust can directly read gzip-compressed files:
+
+```bash
+cargo run --release --features gzip -- 21 sequences.fa.gz
+```
+
+#### Tracing/Logging
+
+With the `tracing` feature, use the `RUST_LOG` environment variable for diagnostic output:
+
+```bash
+RUST_LOG=kmerust=debug cargo run --features tracing -- 21 sequences.fa
+```
+
 ## Output Format
 
 Output is written to stdout in FASTA-like format:
@@ -98,12 +128,62 @@ AATCA
 kmerust can also be used as a library:
 
 ```rust
-use kmerust::run::run;
+use kmerust::run::count_kmers;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = PathBuf::from("sequences.fa");
-    run(path, 21)?;
+    let counts = count_kmers(&path, 21)?;
+    for (kmer, count) in counts {
+        println!("{kmer}: {count}");
+    }
+    Ok(())
+}
+```
+
+### Progress Reporting
+
+Monitor progress during long-running operations:
+
+```rust
+use kmerust::run::count_kmers_with_progress;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let counts = count_kmers_with_progress("genome.fa", 21, |progress| {
+        eprintln!(
+            "Processed {} sequences ({} bases)",
+            progress.sequences_processed,
+            progress.bases_processed
+        );
+    })?;
+    Ok(())
+}
+```
+
+### Memory-Mapped I/O
+
+For large files, use memory-mapped I/O (requires `mmap` feature):
+
+```rust
+use kmerust::run::count_kmers_mmap;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let counts = count_kmers_mmap("large_genome.fa", 21)?;
+    println!("Found {} unique k-mers", counts.len());
+    Ok(())
+}
+```
+
+### Streaming API
+
+For memory-efficient processing:
+
+```rust
+use kmerust::streaming::count_kmers_streaming;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let counts = count_kmers_streaming("genome.fa", 21)?;
+    println!("Found {} unique k-mers", counts.len());
     Ok(())
 }
 ```

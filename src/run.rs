@@ -6,6 +6,7 @@
 use crate::{
     cli::OutputFormat,
     kmer::{unpack_to_string, Kmer, KmerLength},
+    progress::{Progress, ProgressTracker},
     reader::read,
 };
 use bytes::Bytes;
@@ -22,6 +23,10 @@ use std::{
     path::Path,
 };
 use thiserror::Error;
+
+#[cfg(feature = "tracing")]
+#[allow(unused_imports)]
+use tracing::{debug, info, info_span};
 
 /// Errors that can occur during k-mer processing.
 #[derive(Debug, Error)]
@@ -109,11 +114,115 @@ pub fn count_kmers<P>(path: P, k: usize) -> Result<HashMap<String, i32>, Box<dyn
 where
     P: AsRef<Path> + Debug,
 {
+    #[cfg(feature = "tracing")]
+    info!(k = k, path = ?path, "Starting k-mer counting");
+
     // Validate k-mer length upfront to provide a clear error
     let k_len = KmerLength::new(k)?;
 
-    let kmer_map = KmerMap::new().build(read(path)?, k)?;
-    Ok(kmer_map.into_hashmap(k_len))
+    #[cfg(feature = "tracing")]
+    let _read_span = info_span!("read_fasta", path = ?path).entered();
+
+    let sequences = read(&path)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_read_span);
+
+    #[cfg(feature = "tracing")]
+    let _process_span = info_span!("process_sequences").entered();
+
+    let kmer_map = KmerMap::new().build(sequences, k)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_process_span);
+
+    let result = kmer_map.into_hashmap(k_len);
+
+    #[cfg(feature = "tracing")]
+    info!(unique_kmers = result.len(), "K-mer counting complete");
+
+    Ok(result)
+}
+
+/// Counts k-mers with progress callback.
+///
+/// Similar to [`count_kmers`], but invokes a callback after processing each sequence,
+/// allowing callers to monitor progress during long-running operations.
+///
+/// # Arguments
+///
+/// * `path` - Path to the FASTA file
+/// * `k` - K-mer length (must be 1-32)
+/// * `callback` - Function called with a [`Progress`] snapshot after each sequence
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be read
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::run::count_kmers_with_progress;
+///
+/// let counts = count_kmers_with_progress("genome.fa", 21, |progress| {
+///     eprintln!(
+///         "Processed {} sequences ({} bases)",
+///         progress.sequences_processed,
+///         progress.bases_processed
+///     );
+/// })?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn count_kmers_with_progress<P, F>(
+    path: P,
+    k: usize,
+    callback: F,
+) -> Result<HashMap<String, i32>, Box<dyn Error>>
+where
+    P: AsRef<Path> + Debug,
+    F: Fn(Progress) + Send + Sync + 'static,
+{
+    use std::sync::Arc;
+
+    #[cfg(feature = "tracing")]
+    info!(k = k, path = ?path, "Starting k-mer counting with progress");
+
+    // Validate k-mer length upfront to provide a clear error
+    let k_len = KmerLength::new(k)?;
+
+    #[cfg(feature = "tracing")]
+    let _read_span = info_span!("read_fasta", path = ?path).entered();
+
+    let sequences = read(&path)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_read_span);
+
+    #[cfg(feature = "tracing")]
+    let _process_span = info_span!("process_sequences").entered();
+
+    let tracker = Arc::new(ProgressTracker::new());
+    let callback = Arc::new(callback);
+    let kmer_map = KmerMapWithProgress::new(tracker, callback).build(sequences, k)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_process_span);
+
+    let result = kmer_map.into_hashmap(k_len);
+
+    #[cfg(feature = "tracing")]
+    info!(
+        unique_kmers = result.len(),
+        "K-mer counting with progress complete"
+    );
+
+    Ok(result)
 }
 
 fn output_counts(
@@ -218,4 +327,185 @@ impl KmerMap {
             })
             .collect()
     }
+}
+
+/// A k-mer map with progress tracking.
+struct KmerMapWithProgress<F: Fn(Progress) + Send + Sync + 'static> {
+    map: DashFx,
+    tracker: std::sync::Arc<ProgressTracker>,
+    callback: std::sync::Arc<F>,
+}
+
+impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
+    fn new(tracker: std::sync::Arc<ProgressTracker>, callback: std::sync::Arc<F>) -> Self {
+        Self {
+            map: DashMap::with_hasher(BuildHasherDefault::<FxHasher>::default()),
+            tracker,
+            callback,
+        }
+    }
+
+    fn build(
+        self,
+        sequences: rayon::vec::IntoIter<Bytes>,
+        k: usize,
+    ) -> Result<Self, Box<dyn Error>> {
+        use rayon::prelude::ParallelIterator;
+
+        sequences.for_each(|seq| {
+            let len = seq.len() as u64;
+            self.process_sequence(&seq, k);
+            self.tracker.record_sequence(len);
+            (self.callback)(self.tracker.snapshot());
+        });
+        Ok(self)
+    }
+
+    fn process_sequence(&self, seq: &Bytes, k: usize) {
+        if seq.len() < k {
+            return;
+        }
+        let mut i = 0;
+
+        while i <= seq.len() - k {
+            let sub = seq.slice(i..i + k);
+
+            match Kmer::from_sub(sub) {
+                Ok(unpacked) => {
+                    self.process_valid_kmer(unpacked);
+                    i += 1;
+                }
+                Err(err) => {
+                    // Skip past the invalid base
+                    i += err.position + 1;
+                }
+            }
+        }
+    }
+
+    fn process_valid_kmer(&self, unpacked: Kmer) {
+        let packed = unpacked.pack();
+
+        // Optimization: check if we've already seen this exact k-mer
+        if let Some(mut count) = self.map.get_mut(&packed.packed_bits()) {
+            *count += 1;
+        } else {
+            // Not seen before - compute canonical form
+            let canonical = packed.canonical();
+            *self.map.entry(canonical.packed_bits()).or_insert(0) += 1;
+        }
+    }
+
+    fn into_hashmap(self, k: KmerLength) -> HashMap<String, i32> {
+        self.map
+            .into_iter()
+            .par_bridge()
+            .map(|(packed_bits, count)| {
+                let kmer_string = unpack_to_string(packed_bits, k);
+                (kmer_string, count)
+            })
+            .collect()
+    }
+}
+
+/// Counts k-mers using memory-mapped I/O for potentially faster file access.
+///
+/// Memory-maps the FASTA file and processes it directly from the mapped region.
+/// This can be more efficient for large files on systems with sufficient RAM.
+///
+/// # Arguments
+///
+/// * `path` - Path to the FASTA file
+/// * `k` - K-mer length (must be 1-32)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be opened or memory-mapped
+/// - The file cannot be parsed as FASTA
+///
+/// # Safety
+///
+/// The underlying file must not be modified while being processed.
+/// Modifying a mapped file leads to undefined behavior.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::run::count_kmers_mmap;
+///
+/// let counts = count_kmers_mmap("large_genome.fa", 21)?;
+/// println!("Found {} unique k-mers", counts.len());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[cfg(feature = "mmap")]
+pub fn count_kmers_mmap<P>(path: P, k: usize) -> Result<HashMap<String, i32>, Box<dyn Error>>
+where
+    P: AsRef<Path> + Debug,
+{
+    use bio::io::fasta;
+    use rayon::iter::IntoParallelIterator;
+    use std::io::Cursor;
+
+    #[cfg(feature = "tracing")]
+    info!(k = k, path = ?path, "Starting memory-mapped k-mer counting");
+
+    // Validate k-mer length upfront
+    let k_len = KmerLength::new(k)?;
+
+    #[cfg(feature = "tracing")]
+    let _mmap_span = info_span!("mmap_fasta", path = ?path).entered();
+
+    let mmap =
+        crate::mmap::MmapFasta::open(&path).map_err(|e| crate::error::KmeRustError::MmapError {
+            source: e,
+            path: path.as_ref().to_path_buf(),
+        })?;
+
+    #[cfg(feature = "tracing")]
+    {
+        drop(_mmap_span);
+        debug!(size_bytes = mmap.len(), "Memory-mapped file");
+    }
+
+    #[cfg(feature = "tracing")]
+    let _process_span = info_span!("process_sequences").entered();
+
+    // Parse FASTA from the memory-mapped bytes
+    let cursor = Cursor::new(mmap.as_bytes());
+    let reader = fasta::Reader::new(cursor);
+    let records: Vec<_> = reader
+        .records()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| crate::error::KmeRustError::FastaParse {
+            details: e.to_string(),
+        })?;
+
+    let kmer_map = KmerMap::new();
+    let sequences: Vec<Bytes> = records
+        .iter()
+        .map(|r| Bytes::copy_from_slice(r.seq()))
+        .collect();
+
+    sequences
+        .into_par_iter()
+        .for_each(|seq| kmer_map.process_sequence(&seq, k));
+
+    #[cfg(feature = "tracing")]
+    drop(_process_span);
+
+    let result = kmer_map.into_hashmap(k_len);
+
+    #[cfg(feature = "tracing")]
+    info!(
+        unique_kmers = result.len(),
+        "Memory-mapped k-mer counting complete"
+    );
+
+    Ok(result)
 }

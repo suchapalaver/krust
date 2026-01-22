@@ -4,7 +4,21 @@ use clap::Parser;
 use colored::Colorize;
 use kmerust::{cli::Args, run};
 
+/// Initialize the tracing subscriber with environment filter.
+///
+/// Set `RUST_LOG=kmerust=debug` to see debug output.
+#[cfg(feature = "tracing")]
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+}
+
 fn main() {
+    #[cfg(feature = "tracing")]
+    init_tracing();
     let args = Args::parse();
 
     // Validate that the file exists

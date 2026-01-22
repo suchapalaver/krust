@@ -42,6 +42,24 @@ pub enum KmeRustError {
         #[source]
         source: serde_json::Error,
     },
+
+    /// Failed to decompress gzip file.
+    #[cfg(feature = "gzip")]
+    #[error("failed to decompress gzip file '{path}': {source}")]
+    GzipError {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    /// Failed to memory-map file.
+    #[cfg(feature = "mmap")]
+    #[error("failed to memory-map file '{path}': {source}")]
+    MmapError {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
 }
 
 /// Error for invalid k-mer length.
