@@ -2,7 +2,7 @@ use std::process;
 
 use clap::Parser;
 use colored::Colorize;
-use kmerust::{cli::Args, input::Input, run};
+use kmerust::{cli::Args, format::SequenceFormat, input::Input, run};
 
 /// Initialize the tracing subscriber with environment filter.
 ///
@@ -34,6 +34,12 @@ fn main() {
         }
     }
 
+    // Resolve input format (auto-detect from extension or use explicit setting)
+    let input_format = match &input {
+        Input::File(path) => args.input_format.resolve(Some(path)),
+        Input::Stdin => args.input_format.resolve(None),
+    };
+
     if !args.quiet {
         eprintln!(
             "{}: {}",
@@ -44,6 +50,16 @@ fn main() {
             "{}: {}",
             "data".bold(),
             input.to_string().underline().bold().blue()
+        );
+        // Show input format (detected or explicit)
+        let format_display = match (args.input_format, input_format) {
+            (SequenceFormat::Auto, resolved) => format!("{resolved} (auto-detected)"),
+            (explicit, _) => explicit.to_string(),
+        };
+        eprintln!(
+            "{}: {}",
+            "input-format".bold(),
+            format_display.blue().bold()
         );
         eprintln!(
             "{}: {}",
@@ -58,7 +74,7 @@ fn main() {
         );
         eprintln!(
             "{}: {}",
-            "format".bold(),
+            "output-format".bold(),
             format!("{:?}", args.format).to_lowercase().blue().bold()
         );
         if args.min_count > 1 {
@@ -71,7 +87,9 @@ fn main() {
         eprintln!();
     }
 
-    if let Err(e) = run::run_with_input(&input, args.k, args.format, args.min_count) {
+    if let Err(e) =
+        run::run_with_input_format(&input, args.k, args.format, args.min_count, input_format)
+    {
         eprintln!(
             "{}\n {}",
             "Application error:".blue().bold(),

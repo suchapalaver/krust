@@ -47,6 +47,7 @@ use std::hash::BuildHasherDefault;
 
 use crate::{
     error::KmeRustError,
+    format::SequenceFormat,
     input::Input,
     kmer::{unpack_to_string, Kmer, KmerLength},
 };
@@ -275,10 +276,35 @@ where
 /// # Ok::<(), kmerust::error::KmeRustError>(())
 /// ```
 pub fn count_kmers_stdin(k: usize) -> Result<HashMap<String, u64>, KmeRustError> {
+    count_kmers_stdin_with_format(k, SequenceFormat::Auto)
+}
+
+/// Counts k-mers from standard input with explicit format specification.
+///
+/// # Arguments
+///
+/// * `k` - K-mer length (must be 1-32)
+/// * `format` - Input format (Auto defaults to FASTA for stdin)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The input cannot be parsed
+pub fn count_kmers_stdin_with_format(
+    k: usize,
+    format: SequenceFormat,
+) -> Result<HashMap<String, u64>, KmeRustError> {
     let k_len = KmerLength::new(k)?;
     let stdin = std::io::stdin();
     let reader = stdin.lock();
-    let packed = count_kmers_from_reader_impl(reader, k_len)?;
+    // For stdin, resolve format with None path (defaults to FASTA if Auto)
+    let resolved_format = format.resolve(None);
+    let packed = count_kmers_from_reader_impl_with_format(reader, k_len, resolved_format)?;
 
     Ok(packed
         .into_iter()
@@ -472,17 +498,43 @@ fn count_kmers_from_reader_impl<R>(
 where
     R: BufRead,
 {
-    use bio::io::fasta;
+    count_kmers_from_reader_impl_with_format(reader, k, SequenceFormat::Fasta)
+}
 
-    let fasta_reader = fasta::Reader::new(reader);
+/// Internal implementation for counting k-mers from a reader with format.
+#[cfg(not(feature = "needletail"))]
+fn count_kmers_from_reader_impl_with_format<R>(
+    reader: R,
+    k: KmerLength,
+    format: SequenceFormat,
+) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    use bio::io::{fasta, fastq};
+
     let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
         HashMap::with_hasher(BuildHasherDefault::default());
 
-    for result in fasta_reader.records() {
-        let record = result.map_err(|e| KmeRustError::FastaParse {
-            details: e.to_string(),
-        })?;
-        process_sequence_into_counts(&mut counts, record.seq(), k);
+    match format {
+        SequenceFormat::Fastq => {
+            let fastq_reader = fastq::Reader::new(reader);
+            for result in fastq_reader.records() {
+                let record = result.map_err(|e| KmeRustError::SequenceParse {
+                    details: e.to_string(),
+                })?;
+                process_sequence_into_counts(&mut counts, record.seq(), k);
+            }
+        }
+        SequenceFormat::Fasta | SequenceFormat::Auto => {
+            let fasta_reader = fasta::Reader::new(reader);
+            for result in fasta_reader.records() {
+                let record = result.map_err(|e| KmeRustError::SequenceParse {
+                    details: e.to_string(),
+                })?;
+                process_sequence_into_counts(&mut counts, record.seq(), k);
+            }
+        }
     }
 
     Ok(counts.into_iter().collect())
@@ -493,8 +545,25 @@ where
 /// Note: needletail requires the reader to be `Send`, so we read into a buffer first.
 #[cfg(feature = "needletail")]
 fn count_kmers_from_reader_impl<R>(
+    reader: R,
+    k: KmerLength,
+) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    // needletail auto-detects format, so we can ignore the format parameter
+    count_kmers_from_reader_impl_with_format(reader, k, SequenceFormat::Auto)
+}
+
+/// Internal implementation for counting k-mers from a reader with format (needletail version).
+///
+/// Note: needletail requires the reader to be `Send`, so we read into a buffer first.
+/// needletail auto-detects FASTA/FASTQ format, so the format parameter is informational.
+#[cfg(feature = "needletail")]
+fn count_kmers_from_reader_impl_with_format<R>(
     mut reader: R,
     k: KmerLength,
+    _format: SequenceFormat,
 ) -> Result<HashMap<u64, u64>, KmeRustError>
 where
     R: BufRead,
@@ -505,12 +574,12 @@ where
     let mut buffer = Vec::new();
     reader
         .read_to_end(&mut buffer)
-        .map_err(|e| KmeRustError::FastaParse {
+        .map_err(|e| KmeRustError::SequenceParse {
             details: format!("failed to read input: {e}"),
         })?;
 
     let mut parser = needletail::parse_fastx_reader(Cursor::new(buffer)).map_err(|e| {
-        KmeRustError::FastaParse {
+        KmeRustError::SequenceParse {
             details: e.to_string(),
         }
     })?;
@@ -518,7 +587,7 @@ where
         HashMap::with_hasher(BuildHasherDefault::default());
 
     while let Some(result) = parser.next() {
-        let record = result.map_err(|e| KmeRustError::FastaParse {
+        let record = result.map_err(|e| KmeRustError::SequenceParse {
             details: e.to_string(),
         })?;
         process_sequence_into_counts(&mut counts, &record.seq(), k);
@@ -590,7 +659,7 @@ impl SequentialKmerCounter {
             use flate2::read::GzDecoder;
             use std::{fs::File, io::BufReader};
 
-            let file = File::open(path_ref).map_err(|e| KmeRustError::FastaRead {
+            let file = File::open(path_ref).map_err(|e| KmeRustError::SequenceRead {
                 source: e,
                 path: path_ref.to_path_buf(),
             })?;
@@ -598,7 +667,7 @@ impl SequentialKmerCounter {
             let reader = fasta::Reader::new(BufReader::new(decoder));
 
             for result in reader.records() {
-                let record = result.map_err(|e| KmeRustError::FastaParse {
+                let record = result.map_err(|e| KmeRustError::SequenceParse {
                     details: e.to_string(),
                 })?;
                 self.process_sequence(record.seq(), k);
@@ -607,14 +676,15 @@ impl SequentialKmerCounter {
             return Ok(self.counts.into_iter().collect());
         }
 
-        let reader = fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
-            source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
-            path: path_ref.to_path_buf(),
-        })?;
+        let reader =
+            fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                path: path_ref.to_path_buf(),
+            })?;
 
         // Process each record immediately as it's read - no batching
         for result in reader.records() {
-            let record = result.map_err(|e| KmeRustError::FastaParse {
+            let record = result.map_err(|e| KmeRustError::SequenceParse {
                 details: e.to_string(),
             })?;
             self.process_sequence(record.seq(), k);
@@ -634,14 +704,14 @@ impl SequentialKmerCounter {
         let _span = info_span!("sequential_count", path = ?path_ref).entered();
 
         let mut reader =
-            needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+            needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
                 source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
                 path: path_ref.to_path_buf(),
             })?;
 
         // Process each record immediately as it's read - no batching
         while let Some(result) = reader.next() {
-            let record = result.map_err(|e| KmeRustError::FastaParse {
+            let record = result.map_err(|e| KmeRustError::SequenceParse {
                 details: e.to_string(),
             })?;
             self.process_sequence(&record.seq(), k);
@@ -698,16 +768,17 @@ impl StreamingKmerCounter {
         #[cfg(feature = "tracing")]
         let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
 
-        let reader = fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
-            source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
-            path: path_ref.to_path_buf(),
-        })?;
+        let reader =
+            fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                path: path_ref.to_path_buf(),
+            })?;
 
         // Process records in parallel chunks for efficiency while maintaining streaming behavior
         let records: Vec<_> = reader
             .records()
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| KmeRustError::FastaParse {
+            .map_err(|e| KmeRustError::SequenceParse {
                 details: e.to_string(),
             })?;
 
@@ -745,7 +816,7 @@ impl StreamingKmerCounter {
         let is_gzip = path_ref.extension().map(|ext| ext == "gz").unwrap_or(false);
 
         let records: Vec<bio::io::fasta::Record> = if is_gzip {
-            let file = File::open(path_ref).map_err(|e| KmeRustError::FastaRead {
+            let file = File::open(path_ref).map_err(|e| KmeRustError::SequenceRead {
                 source: e,
                 path: path_ref.to_path_buf(),
             })?;
@@ -754,19 +825,19 @@ impl StreamingKmerCounter {
             reader
                 .records()
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| KmeRustError::FastaParse {
+                .map_err(|e| KmeRustError::SequenceParse {
                     details: e.to_string(),
                 })?
         } else {
             let reader =
-                fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+                fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
                     source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
                     path: path_ref.to_path_buf(),
                 })?;
             reader
                 .records()
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| KmeRustError::FastaParse {
+                .map_err(|e| KmeRustError::SequenceParse {
                     details: e.to_string(),
                 })?
         };
@@ -799,7 +870,7 @@ impl StreamingKmerCounter {
         let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
 
         let mut reader =
-            needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::FastaRead {
+            needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
                 source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
                 path: path_ref.to_path_buf(),
             })?;
@@ -807,7 +878,7 @@ impl StreamingKmerCounter {
         // Collect sequences for parallel processing
         let mut sequences = Vec::new();
         while let Some(record) = reader.next() {
-            let record = record.map_err(|e| KmeRustError::FastaParse {
+            let record = record.map_err(|e| KmeRustError::SequenceParse {
                 details: e.to_string(),
             })?;
             sequences.push(Bytes::copy_from_slice(&record.seq()));

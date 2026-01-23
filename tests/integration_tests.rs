@@ -397,3 +397,202 @@ fn cli_stdin_multiple_sequences() {
     // Should have processed both sequences
     assert!(!stdout.is_empty());
 }
+
+// FASTQ Support Tests
+
+#[test]
+fn cli_simple_fastq_counting() {
+    let output = kmerust_cmd()
+        .args(["3", "tests/fixtures/simple.fq"])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Output should contain k-mers in FASTA-like format (>count\nkmer)
+    assert!(stdout.contains('>'));
+}
+
+#[test]
+fn cli_fastq_handles_n_bases() {
+    let output = kmerust_cmd()
+        .args(["3", "tests/fixtures/with_n.fq"])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should still produce output (N bases are skipped)
+    assert!(stdout.contains('>'));
+    // Output should not contain N bases
+    assert!(!stdout.contains('N'));
+}
+
+#[test]
+fn cli_fastq_explicit_format() {
+    let output = kmerust_cmd()
+        .args(["3", "tests/fixtures/simple.fq", "--input-format", "fastq"])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains('>'));
+}
+
+#[test]
+fn cli_stdin_fastq_explicit_format() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fastq_content = b"@seq1\nACGTACGT\n+\nIIIIIIII\n";
+
+    let mut child = kmerust_cmd()
+        .args([
+            "4",
+            "-",
+            "--input-format",
+            "fastq",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fastq_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should contain k-mers from the sequence
+    assert!(stdout.contains("ACGT") || stdout.contains("TACG") || stdout.contains("CGTA"));
+}
+
+#[test]
+fn cli_fastq_matches_fasta_counts() {
+    // Count k-mers from FASTA and FASTQ files with same sequences
+    let fasta_output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute FASTA");
+
+    let fastq_output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fq",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute FASTQ");
+
+    assert!(fasta_output.status.success());
+    assert!(fastq_output.status.success());
+
+    // Parse outputs and compare counts
+    let fasta_counts = parse_tsv_counts(&fasta_output.stdout);
+    let fastq_counts = parse_tsv_counts(&fastq_output.stdout);
+
+    // Same sequences should produce same k-mer counts
+    assert_eq!(
+        fasta_counts, fastq_counts,
+        "FASTA and FASTQ should produce identical k-mer counts"
+    );
+}
+
+#[test]
+fn cli_fastq_format_auto_detection() {
+    // Test that format is auto-detected from .fq extension
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fq",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should have k-mer output (format was correctly detected as FASTQ)
+    assert!(!stdout.is_empty());
+}
+
+#[test]
+fn cli_input_format_flag_short() {
+    // Test short flag -i for input format
+    let output = kmerust_cmd()
+        .args(["3", "tests/fixtures/simple.fq", "-i", "fastq", "--quiet"])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+}
+
+#[test]
+#[cfg_attr(not(feature = "gzip"), ignore)]
+fn cli_gzip_fastq_counting() {
+    // Test gzip-compressed FASTQ file
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fq.gz",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should have k-mer output
+    assert!(!stdout.is_empty());
+
+    // Verify it produces same counts as uncompressed FASTQ
+    let uncompressed_output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fq",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+
+    let gzip_counts = parse_tsv_counts(&output.stdout);
+    let plain_counts = parse_tsv_counts(&uncompressed_output.stdout);
+
+    assert_eq!(
+        gzip_counts, plain_counts,
+        "Gzipped FASTQ should produce identical counts to uncompressed FASTQ"
+    );
+}
+
+fn parse_tsv_counts(output: &[u8]) -> std::collections::HashMap<String, u64> {
+    String::from_utf8_lossy(output)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let kmer = parts.next()?;
+            let count: u64 = parts.next()?.parse().ok()?;
+            Some((kmer.to_string(), count))
+        })
+        .collect()
+}

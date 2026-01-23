@@ -1,15 +1,16 @@
 //! K-mer counting and output.
 //!
 //! This module provides the main k-mer counting functionality, using parallel
-//! processing to efficiently count canonical k-mers across all sequences in a FASTA file.
+//! processing to efficiently count canonical k-mers across all sequences in FASTA or FASTQ files.
 
 use crate::{
     cli::OutputFormat,
+    format::SequenceFormat,
     input::Input,
     kmer::{unpack_to_string, Kmer, KmerLength},
     progress::{Progress, ProgressTracker},
     reader::read,
-    streaming::count_kmers_stdin,
+    streaming::count_kmers_stdin_with_format,
 };
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -97,12 +98,13 @@ where
 /// Counts k-mers from an input source (file or stdin) and writes results to stdout.
 ///
 /// This is the main entry point for input-agnostic k-mer counting with output.
+/// Input format is auto-detected from file extension.
 ///
 /// # Arguments
 ///
 /// * `input` - The input source (file path or stdin)
 /// * `k` - K-mer length
-/// * `format` - Output format (fasta, tsv, or json)
+/// * `output_format` - Output format (fasta, tsv, or json)
 /// * `min_count` - Minimum count threshold (k-mers below this are excluded)
 ///
 /// # Errors
@@ -129,23 +131,48 @@ where
 pub fn run_with_input(
     input: &Input,
     k: usize,
-    format: OutputFormat,
+    output_format: OutputFormat,
     min_count: u64,
 ) -> Result<(), ProcessError> {
+    run_with_input_format(input, k, output_format, min_count, SequenceFormat::Auto)
+}
+
+/// Counts k-mers from an input source with explicit input format specification.
+///
+/// # Arguments
+///
+/// * `input` - The input source (file path or stdin)
+/// * `k` - K-mer length
+/// * `output_format` - Output format (fasta, tsv, or json)
+/// * `min_count` - Minimum count threshold (k-mers below this are excluded)
+/// * `input_format` - Input file format (Auto, Fasta, or Fastq)
+///
+/// # Errors
+///
+/// Returns `ProcessError` on read, write, or serialization errors.
+pub fn run_with_input_format(
+    input: &Input,
+    k: usize,
+    output_format: OutputFormat,
+    min_count: u64,
+    input_format: SequenceFormat,
+) -> Result<(), ProcessError> {
     let counts = match input {
-        Input::File(path) => count_kmers(path, k)?,
-        Input::Stdin => count_kmers_stdin(k).map_err(|e| ProcessError::ReadError(e.into()))?,
+        Input::File(path) => count_kmers_with_format(path, k, input_format)?,
+        Input::Stdin => count_kmers_stdin_with_format(k, input_format)
+            .map_err(|e| ProcessError::ReadError(e.into()))?,
     };
-    output_counts(counts, format, min_count)
+    output_counts(counts, output_format, min_count)
 }
 
 /// Counts k-mers and returns them as a HashMap.
 ///
 /// This is the main library API for counting k-mers without writing to stdout.
+/// Input format is auto-detected from the file extension.
 ///
 /// # Arguments
 ///
-/// * `path` - Path to the FASTA file
+/// * `path` - Path to the FASTA or FASTQ file
 /// * `k` - K-mer length (must be 1-32)
 ///
 /// # Returns
@@ -161,6 +188,34 @@ pub fn count_kmers<P>(path: P, k: usize) -> Result<HashMap<String, u64>, Box<dyn
 where
     P: AsRef<Path> + Debug,
 {
+    count_kmers_with_format(path, k, SequenceFormat::Auto)
+}
+
+/// Counts k-mers with explicit format specification.
+///
+/// # Arguments
+///
+/// * `path` - Path to the sequence file
+/// * `k` - K-mer length (must be 1-32)
+/// * `format` - Input file format (Auto, Fasta, or Fastq)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be read
+pub fn count_kmers_with_format<P>(
+    path: P,
+    k: usize,
+    format: SequenceFormat,
+) -> Result<HashMap<String, u64>, Box<dyn Error>>
+where
+    P: AsRef<Path> + Debug,
+{
     #[cfg(feature = "tracing")]
     info!(k = k, path = ?path, "Starting k-mer counting");
 
@@ -168,9 +223,9 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _read_span = info_span!("read_fasta", path = ?path).entered();
+    let _read_span = info_span!("read_sequences", path = ?path).entered();
 
-    let sequences = read(&path)?;
+    let sequences = read(&path, format)?;
 
     #[cfg(feature = "tracing")]
     drop(_read_span);
@@ -195,10 +250,11 @@ where
 ///
 /// Similar to [`count_kmers`], but invokes a callback after processing each sequence,
 /// allowing callers to monitor progress during long-running operations.
+/// Input format is auto-detected from the file extension.
 ///
 /// # Arguments
 ///
-/// * `path` - Path to the FASTA file
+/// * `path` - Path to the FASTA or FASTQ file
 /// * `k` - K-mer length (must be 1-32)
 /// * `callback` - Function called with a [`Progress`] snapshot after each sequence
 ///
@@ -244,9 +300,9 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _read_span = info_span!("read_fasta", path = ?path).entered();
+    let _read_span = info_span!("read_sequences", path = ?path).entered();
 
-    let sequences = read(&path)?;
+    let sequences = read(&path, SequenceFormat::Auto)?;
 
     #[cfg(feature = "tracing")]
     drop(_read_span);
@@ -519,7 +575,7 @@ where
     let records: Vec<_> = reader
         .records()
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| crate::error::KmeRustError::FastaParse {
+        .map_err(|e| crate::error::KmeRustError::SequenceParse {
             details: e.to_string(),
         })?;
 

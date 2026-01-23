@@ -3,21 +3,29 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
+use crate::format::SequenceFormat;
 use crate::input::Input;
 
-/// A fast, parallel k-mer counter for DNA sequences in FASTA files.
+/// A fast, parallel k-mer counter for DNA sequences in FASTA and FASTQ files.
 ///
 /// Supports reading from files or stdin (use `-` or omit path for stdin).
+/// Input format is auto-detected from file extension, or can be specified explicitly.
 ///
 /// # Examples
 ///
 /// ```bash
-/// # Count k-mers from a file
+/// # Count k-mers from a FASTA file
 /// krust 21 sequences.fa
+///
+/// # Count k-mers from a FASTQ file
+/// krust 21 reads.fq
 ///
 /// # Count k-mers from stdin
 /// cat sequences.fa | krust 21
 /// cat sequences.fa | krust 21 -
+///
+/// # Stdin with explicit format
+/// cat reads.fq | krust 21 --input-format fastq
 ///
 /// # With gzip
 /// zcat large.fa.gz | krust 21 > counts.tsv
@@ -45,6 +53,10 @@ pub struct Args {
     /// Suppress informational output (only output k-mer counts)
     #[arg(short, long)]
     pub quiet: bool,
+
+    /// Input file format (auto-detected from extension if not specified)
+    #[arg(short = 'i', long = "input-format", value_enum, default_value = "auto")]
+    pub input_format: SequenceFormat,
 }
 
 impl Args {
@@ -52,6 +64,15 @@ impl Args {
     #[must_use]
     pub fn input(&self) -> Input {
         Input::from_path(&self.path)
+    }
+
+    /// Returns the resolved input format.
+    ///
+    /// If `input_format` is `Auto`, detects from the file extension.
+    /// For stdin without explicit format, defaults to FASTA.
+    #[must_use]
+    pub fn resolved_input_format(&self) -> SequenceFormat {
+        self.input_format.resolve(Some(&self.path))
     }
 }
 

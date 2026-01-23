@@ -24,9 +24,10 @@ use std::{collections::HashMap, fmt::Debug, io::Write, path::Path};
 use crate::{
     cli::OutputFormat,
     error::{BuilderError, KmerLengthError},
+    format::SequenceFormat,
     kmer::KmerLength,
     progress::Progress,
-    run::{count_kmers, count_kmers_with_progress, run_with_options},
+    run::{count_kmers_with_format, count_kmers_with_progress, run_with_options},
 };
 
 /// A builder for configuring k-mer counting operations.
@@ -40,10 +41,15 @@ use crate::{
 /// ```rust,no_run
 /// use kmerust::builder::KmerCounter;
 ///
-/// // Basic usage
+/// // Basic usage - FASTA file
 /// let counts = KmerCounter::new()
 ///     .k(21)?
 ///     .count("sequences.fa")?;
+///
+/// // FASTQ file (format auto-detected from extension)
+/// let counts = KmerCounter::new()
+///     .k(21)?
+///     .count("reads.fq")?;
 ///
 /// // With all options
 /// let counts = KmerCounter::new()
@@ -57,6 +63,7 @@ pub struct KmerCounter {
     k: Option<KmerLength>,
     min_count: u64,
     format: OutputFormat,
+    input_format: SequenceFormat,
 }
 
 impl Default for KmerCounter {
@@ -71,7 +78,8 @@ impl KmerCounter {
     /// Default settings:
     /// - `k`: None (must be set before counting)
     /// - `min_count`: 1 (include all k-mers)
-    /// - `format`: FASTA
+    /// - `format`: FASTA output
+    /// - `input_format`: Auto (detected from file extension)
     ///
     /// Note: All k-mer counting uses canonical k-mers (k-mer and its reverse
     /// complement are treated as equivalent).
@@ -89,6 +97,7 @@ impl KmerCounter {
             k: None,
             min_count: 1,
             format: OutputFormat::Fasta,
+            input_format: SequenceFormat::Auto,
         }
     }
 
@@ -174,9 +183,38 @@ impl KmerCounter {
         self
     }
 
-    /// Counts k-mers in the specified FASTA file.
+    /// Sets the input file format.
+    ///
+    /// By default, format is auto-detected from the file extension:
+    /// - `.fq`, `.fastq`, `.fq.gz`, `.fastq.gz` -> FASTQ
+    /// - `.fa`, `.fasta`, `.fna`, `.fa.gz`, `.fasta.gz`, `.fna.gz` -> FASTA
+    ///
+    /// Use this method to explicitly specify the format when auto-detection
+    /// is not sufficient (e.g., when reading from stdin or files with
+    /// non-standard extensions).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kmerust::builder::KmerCounter;
+    /// use kmerust::format::SequenceFormat;
+    ///
+    /// let counter = KmerCounter::new()
+    ///     .k(21)?
+    ///     .input_format(SequenceFormat::Fastq);
+    /// # Ok::<(), kmerust::error::KmerLengthError>(())
+    /// ```
+    #[must_use]
+    pub fn input_format(mut self, format: SequenceFormat) -> Self {
+        self.input_format = format;
+        self
+    }
+
+    /// Counts k-mers in the specified sequence file.
     ///
     /// Returns a HashMap mapping k-mer strings to their counts.
+    /// Input format is auto-detected from extension unless explicitly set via
+    /// [`input_format()`](Self::input_format).
     ///
     /// # Errors
     ///
@@ -188,9 +226,15 @@ impl KmerCounter {
     /// ```rust,no_run
     /// use kmerust::builder::KmerCounter;
     ///
+    /// // FASTA file
     /// let counts = KmerCounter::new()
     ///     .k(21)?
     ///     .count("genome.fa")?;
+    ///
+    /// // FASTQ file (format auto-detected)
+    /// let counts = KmerCounter::new()
+    ///     .k(21)?
+    ///     .count("reads.fq")?;
     ///
     /// println!("Found {} unique k-mers", counts.len());
     /// # Ok::<(), kmerust::error::BuilderError>(())
@@ -201,7 +245,7 @@ impl KmerCounter {
     {
         let k = self.k.ok_or(BuilderError::KmerLengthNotSet)?;
 
-        let counts = count_kmers(&path, k.get())?;
+        let counts = count_kmers_with_format(&path, k.get(), self.input_format)?;
 
         // Apply min_count filter
         if self.min_count > 1 {
@@ -454,6 +498,12 @@ impl KmerCounter {
     #[must_use]
     pub fn get_format(&self) -> OutputFormat {
         self.format
+    }
+
+    /// Returns the configured input format.
+    #[must_use]
+    pub fn get_input_format(&self) -> SequenceFormat {
+        self.input_format
     }
 }
 

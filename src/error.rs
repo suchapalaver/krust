@@ -17,17 +17,17 @@ pub enum KmeRustError {
     #[error("invalid base '{base}' at position {position}")]
     InvalidBase { base: u8, position: usize },
 
-    /// Failed to read FASTA file.
-    #[error("failed to read FASTA file '{path}': {source}")]
-    FastaRead {
+    /// Failed to read sequence file.
+    #[error("failed to read sequence file '{path}': {source}")]
+    SequenceRead {
         #[source]
         source: std::io::Error,
         path: PathBuf,
     },
 
-    /// Failed to parse FASTA record.
-    #[error("failed to parse FASTA record: {details}")]
-    FastaParse { details: String },
+    /// Failed to parse sequence record.
+    #[error("failed to parse sequence record: {details}")]
+    SequenceParse { details: String },
 
     /// Failed to write output.
     #[error("failed to write output: {source}")]

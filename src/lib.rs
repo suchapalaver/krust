@@ -1,6 +1,6 @@
 //! # kmerust
 //!
-//! A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA files.
+//! A fast, parallel [k-mer](https://en.wikipedia.org/wiki/K-mer) counter for DNA sequences in FASTA and FASTQ files.
 //!
 //! ## Features
 //!
@@ -83,6 +83,7 @@ pub mod async_api;
 pub mod builder;
 pub mod cli;
 pub mod error;
+pub mod format;
 pub mod input;
 pub mod kmer;
 #[cfg(feature = "mmap")]
