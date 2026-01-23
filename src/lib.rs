@@ -83,6 +83,7 @@ pub mod async_api;
 pub mod builder;
 pub mod cli;
 pub mod error;
+pub mod input;
 pub mod kmer;
 #[cfg(feature = "mmap")]
 pub mod mmap;

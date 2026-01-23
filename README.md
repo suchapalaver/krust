@@ -41,10 +41,13 @@ kmerust <k> <path>
 ### Arguments
 
 - `<k>` - K-mer length (1-32)
-- `<path>` - Path to a FASTA file
+- `<path>` - Path to a FASTA file (use `-` or omit for stdin)
 
 ### Options
 
+- `-f, --format <FORMAT>` - Output format: `fasta` (default), `tsv`, or `json`
+- `-m, --min-count <N>` - Minimum count threshold (default: 1)
+- `-q, --quiet` - Suppress informational output
 - `-h, --help` - Print help information
 - `-V, --version` - Print version information
 
@@ -60,6 +63,39 @@ Count 5-mers:
 
 ```bash
 kmerust 5 sequences.fa > kmers.txt
+```
+
+### Unix Pipeline Integration
+
+kmerust supports reading from stdin, enabling seamless integration with Unix pipelines:
+
+```bash
+# Pipe from another command
+cat genome.fa | kmerust 21
+
+# Decompress and count
+zcat large.fa.gz | kmerust 21 > counts.tsv
+
+# Sample reads and count
+seqtk sample reads.fa 0.1 | kmerust 17
+
+# Explicit stdin marker
+cat genome.fa | kmerust 21 -
+```
+
+### Output Formats
+
+Use `--format` to choose the output format:
+
+```bash
+# TSV format (tab-separated)
+kmerust 21 sequences.fa --format tsv
+
+# JSON format
+kmerust 21 sequences.fa --format json
+
+# FASTA-like format (default)
+kmerust 21 sequences.fa --format fasta
 ```
 
 ### FASTA Readers
@@ -184,6 +220,28 @@ use kmerust::streaming::count_kmers_streaming;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let counts = count_kmers_streaming("genome.fa", 21)?;
     println!("Found {} unique k-mers", counts.len());
+    Ok(())
+}
+```
+
+### Reading from Any Source
+
+Count k-mers from any `BufRead` source, including stdin or in-memory data:
+
+```rust
+use kmerust::streaming::count_kmers_from_reader;
+use std::io::BufReader;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // From in-memory data
+    let fasta_data = b">seq1\nACGTACGT\n>seq2\nTGCATGCA\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let counts = count_kmers_from_reader(reader, 4)?;
+
+    // From stdin
+    // use kmerust::streaming::count_kmers_stdin;
+    // let counts = count_kmers_stdin(21)?;
+
     Ok(())
 }
 ```

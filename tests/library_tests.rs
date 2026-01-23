@@ -4,7 +4,8 @@
 //! enabling more precise assertions about behavior and return values.
 
 use kmerust::run::count_kmers;
-use std::io::Write;
+use kmerust::streaming::count_kmers_from_reader;
+use std::io::{BufReader, Write};
 use tempfile::NamedTempFile;
 
 /// Creates a temporary FASTA file with the given content and returns its path.
@@ -264,4 +265,89 @@ fn count_kmers_soft_masked_fixture() {
 
     // AAAa treated as AAAA, has 2 3-mers: AAA, AAA
     assert_eq!(result.get("AAA"), Some(&2));
+}
+
+// Tests for count_kmers_from_reader (stdin/reader support)
+
+#[test]
+fn count_kmers_from_reader_basic() {
+    let fasta_data = b">seq\nACGT\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let result = count_kmers_from_reader(reader, 3).unwrap();
+
+    // Same as file-based test
+    assert_eq!(result.get("ACG"), Some(&2));
+    assert_eq!(result.len(), 1);
+}
+
+#[test]
+fn count_kmers_from_reader_empty_sequence() {
+    // Test with a header but no sequence (or sequence too short for k)
+    let fasta_data = b">seq\nAC\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let result = count_kmers_from_reader(reader, 3).unwrap();
+
+    // Sequence "AC" is too short for k=3, so no k-mers
+    assert!(result.is_empty());
+}
+
+#[test]
+fn count_kmers_from_reader_multiple_sequences() {
+    let fasta_data = b">seq1\nACGT\n>seq2\nTGCA\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let result = count_kmers_from_reader(reader, 2).unwrap();
+
+    // Should process both sequences
+    assert!(!result.is_empty());
+}
+
+#[test]
+fn count_kmers_from_reader_handles_n_bases() {
+    let fasta_data = b">seq\nACGNACG\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let result = count_kmers_from_reader(reader, 3).unwrap();
+
+    // ACG appears twice (before and after N)
+    assert_eq!(result.get("ACG"), Some(&2));
+
+    // No k-mers should contain N
+    for kmer in result.keys() {
+        assert!(!kmer.contains('N'), "k-mer {kmer} should not contain N");
+    }
+}
+
+#[test]
+fn count_kmers_from_reader_soft_masked() {
+    let fasta_data = b">seq\nacgt\n";
+    let reader = BufReader::new(&fasta_data[..]);
+    let result = count_kmers_from_reader(reader, 3).unwrap();
+
+    assert_eq!(result.get("ACG"), Some(&2));
+}
+
+#[test]
+fn count_kmers_from_reader_matches_file_based() {
+    // Verify that reader-based counting gives same results as file-based
+    let fasta_content = ">seq1\nACGTACGT\n>seq2\nGATTACA\n";
+
+    // File-based
+    let fasta_file = temp_fasta(fasta_content);
+    let file_result = count_kmers(fasta_file.path(), 3).unwrap();
+
+    // Reader-based
+    let reader = BufReader::new(fasta_content.as_bytes());
+    let reader_result = count_kmers_from_reader(reader, 3).unwrap();
+
+    assert_eq!(file_result, reader_result);
+}
+
+#[test]
+fn count_kmers_from_reader_rejects_invalid_k() {
+    let fasta_data = b">seq\nACGT\n";
+
+    let reader = BufReader::new(&fasta_data[..]);
+    assert!(count_kmers_from_reader(reader, 0).is_err());
+
+    let reader = BufReader::new(&fasta_data[..]);
+    assert!(count_kmers_from_reader(reader, 33).is_err());
 }

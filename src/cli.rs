@@ -3,7 +3,25 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
+use crate::input::Input;
+
 /// A fast, parallel k-mer counter for DNA sequences in FASTA files.
+///
+/// Supports reading from files or stdin (use `-` or omit path for stdin).
+///
+/// # Examples
+///
+/// ```bash
+/// # Count k-mers from a file
+/// krust 21 sequences.fa
+///
+/// # Count k-mers from stdin
+/// cat sequences.fa | krust 21
+/// cat sequences.fa | krust 21 -
+///
+/// # With gzip
+/// zcat large.fa.gz | krust 21 > counts.tsv
+/// ```
 #[derive(Parser, Debug)]
 #[command(name = "kmerust")]
 #[command(version, author, about, long_about = None)]
@@ -12,7 +30,8 @@ pub struct Args {
     #[arg(value_parser = parse_k)]
     pub k: usize,
 
-    /// Path to a FASTA file
+    /// Input file path (use '-' or omit for stdin)
+    #[arg(default_value = "-")]
     pub path: PathBuf,
 
     /// Output format
@@ -26,6 +45,14 @@ pub struct Args {
     /// Suppress informational output (only output k-mer counts)
     #[arg(short, long)]
     pub quiet: bool,
+}
+
+impl Args {
+    /// Returns the input source (file or stdin).
+    #[must_use]
+    pub fn input(&self) -> Input {
+        Input::from_path(&self.path)
+    }
 }
 
 /// Output format for k-mer counts.

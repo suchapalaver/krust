@@ -5,9 +5,11 @@
 
 use crate::{
     cli::OutputFormat,
+    input::Input,
     kmer::{unpack_to_string, Kmer, KmerLength},
     progress::{Progress, ProgressTracker},
     reader::read,
+    streaming::count_kmers_stdin,
 };
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -89,6 +91,51 @@ where
     P: AsRef<Path> + Debug,
 {
     let counts = count_kmers(&path, k)?;
+    output_counts(counts, format, min_count)
+}
+
+/// Counts k-mers from an input source (file or stdin) and writes results to stdout.
+///
+/// This is the main entry point for input-agnostic k-mer counting with output.
+///
+/// # Arguments
+///
+/// * `input` - The input source (file path or stdin)
+/// * `k` - K-mer length
+/// * `format` - Output format (fasta, tsv, or json)
+/// * `min_count` - Minimum count threshold (k-mers below this are excluded)
+///
+/// # Errors
+///
+/// Returns `ProcessError` on read, write, or serialization errors.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::run::run_with_input;
+/// use kmerust::input::Input;
+/// use kmerust::cli::OutputFormat;
+/// use std::path::Path;
+///
+/// // From file
+/// let input = Input::from_path(Path::new("genome.fa"));
+/// run_with_input(&input, 21, OutputFormat::Tsv, 1)?;
+///
+/// // From stdin
+/// let input = Input::Stdin;
+/// // run_with_input(&input, 21, OutputFormat::Tsv, 1)?;
+/// # Ok::<(), kmerust::run::ProcessError>(())
+/// ```
+pub fn run_with_input(
+    input: &Input,
+    k: usize,
+    format: OutputFormat,
+    min_count: u64,
+) -> Result<(), ProcessError> {
+    let counts = match input {
+        Input::File(path) => count_kmers(path, k)?,
+        Input::Stdin => count_kmers_stdin(k).map_err(|e| ProcessError::ReadError(e.into()))?,
+    };
     output_counts(counts, format, min_count)
 }
 

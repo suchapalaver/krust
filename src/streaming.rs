@@ -9,6 +9,7 @@
 //! |----------|-------------|--------|----------|
 //! | [`count_kmers_streaming`] | Parallel | Moderate | Most use cases |
 //! | [`count_kmers_sequential`] | Single-threaded | Minimal | Extreme memory constraints |
+//! | [`count_kmers_from_reader`] | Single-threaded | Minimal | Stdin/custom readers |
 //!
 //! # Memory Model
 //!
@@ -22,6 +23,11 @@
 //! - Lowest possible memory footprint
 //! - Memory usage: one sequence + count map
 //!
+//! **Reader API ([`count_kmers_from_reader`]):**
+//! - Works with any `BufRead` source including stdin
+//! - Single-threaded, minimal memory
+//! - Enables Unix pipeline integration
+//!
 //! For both APIs, the count map (one `u64` key + one `u64` value per unique k-mer)
 //! dominates memory usage for most datasets.
 //!
@@ -31,7 +37,7 @@
 //! results as packed 64-bit integers instead of strings. This avoids string allocation
 //! overhead when you need to do further processing on the k-mer counts.
 
-use std::{collections::HashMap, fmt::Debug, path::Path};
+use std::{collections::HashMap, fmt::Debug, io::BufRead, path::Path};
 
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -41,6 +47,7 @@ use std::hash::BuildHasherDefault;
 
 use crate::{
     error::KmeRustError,
+    input::Input,
     kmer::{unpack_to_string, Kmer, KmerLength},
 };
 
@@ -231,6 +238,321 @@ where
     let k_len = KmerLength::new(k)?;
     let counter = SequentialKmerCounter::new();
     counter.count_file(path, k_len)
+}
+
+/// Counts k-mers from standard input.
+///
+/// Reads FASTA-formatted sequences from stdin and counts k-mers.
+/// This enables Unix pipeline integration:
+///
+/// ```bash
+/// cat genome.fa | krust 21
+/// zcat large.fa.gz | krust 21 > counts.tsv
+/// seqtk sample reads.fq 0.1 | krust 17
+/// ```
+///
+/// # Arguments
+///
+/// * `k` - K-mer length (must be 1-32)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The input cannot be parsed as FASTA
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::streaming::count_kmers_stdin;
+///
+/// let counts = count_kmers_stdin(21)?;
+/// println!("Found {} unique k-mers", counts.len());
+/// # Ok::<(), kmerust::error::KmeRustError>(())
+/// ```
+pub fn count_kmers_stdin(k: usize) -> Result<HashMap<String, u64>, KmeRustError> {
+    let k_len = KmerLength::new(k)?;
+    let stdin = std::io::stdin();
+    let reader = stdin.lock();
+    let packed = count_kmers_from_reader_impl(reader, k_len)?;
+
+    Ok(packed
+        .into_iter()
+        .map(|(bits, count)| (unpack_to_string(bits, k_len), count))
+        .collect())
+}
+
+/// Counts k-mers from standard input, returning packed bit representations.
+///
+/// This is the most efficient stdin API, avoiding string allocation.
+///
+/// # Arguments
+///
+/// * `k` - Validated k-mer length
+///
+/// # Returns
+///
+/// A HashMap mapping packed k-mer bits to their counts.
+///
+/// # Errors
+///
+/// Returns an error if the input cannot be parsed as FASTA.
+pub fn count_kmers_stdin_packed(k: KmerLength) -> Result<HashMap<u64, u64>, KmeRustError> {
+    let stdin = std::io::stdin();
+    let reader = stdin.lock();
+    count_kmers_from_reader_impl(reader, k)
+}
+
+/// Counts k-mers from any buffered reader.
+///
+/// This is the most flexible API, allowing k-mer counting from any source
+/// that implements `BufRead`, including files, stdin, network streams, or
+/// in-memory buffers.
+///
+/// # Arguments
+///
+/// * `reader` - Any type implementing `BufRead`
+/// * `k` - K-mer length (must be 1-32)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The input cannot be parsed as FASTA
+///
+/// # Example
+///
+/// ```rust
+/// use kmerust::streaming::count_kmers_from_reader;
+/// use std::io::BufReader;
+///
+/// let fasta_data = b">seq1\nACGTACGT\n>seq2\nTGCATGCA\n";
+/// let reader = BufReader::new(&fasta_data[..]);
+/// let counts = count_kmers_from_reader(reader, 4)?;
+/// assert!(!counts.is_empty());
+/// # Ok::<(), kmerust::error::KmeRustError>(())
+/// ```
+pub fn count_kmers_from_reader<R>(reader: R, k: usize) -> Result<HashMap<String, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    let k_len = KmerLength::new(k)?;
+    let packed = count_kmers_from_reader_impl(reader, k_len)?;
+
+    Ok(packed
+        .into_iter()
+        .map(|(bits, count)| (unpack_to_string(bits, k_len), count))
+        .collect())
+}
+
+/// Counts k-mers from any buffered reader, returning packed bit representations.
+///
+/// This is the most efficient reader API, avoiding string allocation.
+///
+/// # Arguments
+///
+/// * `reader` - Any type implementing `BufRead`
+/// * `k` - Validated k-mer length
+///
+/// # Returns
+///
+/// A HashMap mapping packed k-mer bits to their counts.
+///
+/// # Errors
+///
+/// Returns an error if the input cannot be parsed as FASTA.
+///
+/// # Example
+///
+/// ```rust
+/// use kmerust::streaming::count_kmers_from_reader_packed;
+/// use kmerust::kmer::KmerLength;
+/// use std::io::BufReader;
+///
+/// let fasta_data = b">seq1\nACGTACGT\n>seq2\nTGCATGCA\n";
+/// let reader = BufReader::new(&fasta_data[..]);
+/// let k = KmerLength::new(4)?;
+/// let counts = count_kmers_from_reader_packed(reader, k)?;
+/// assert!(!counts.is_empty());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn count_kmers_from_reader_packed<R>(
+    reader: R,
+    k: KmerLength,
+) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    count_kmers_from_reader_impl(reader, k)
+}
+
+/// Counts k-mers from an [`Input`] source (file or stdin).
+///
+/// This is the main entry point for input-agnostic k-mer counting.
+///
+/// # Arguments
+///
+/// * `input` - The input source (file path or stdin)
+/// * `k` - K-mer length (must be 1-32)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The input cannot be read or parsed
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kmerust::streaming::count_kmers_from_input;
+/// use kmerust::input::Input;
+/// use std::path::Path;
+///
+/// // From file
+/// let input = Input::from_path(Path::new("genome.fa"));
+/// let counts = count_kmers_from_input(&input, 21)?;
+///
+/// // From stdin (would read from actual stdin)
+/// let input = Input::Stdin;
+/// // let counts = count_kmers_from_input(&input, 21)?;
+/// # Ok::<(), kmerust::error::KmeRustError>(())
+/// ```
+pub fn count_kmers_from_input(
+    input: &Input,
+    k: usize,
+) -> Result<HashMap<String, u64>, KmeRustError> {
+    match input {
+        Input::File(path) => count_kmers_streaming(path, k),
+        Input::Stdin => count_kmers_stdin(k),
+    }
+}
+
+/// Counts k-mers from an [`Input`] source, returning packed bit representations.
+///
+/// # Arguments
+///
+/// * `input` - The input source (file path or stdin)
+/// * `k` - Validated k-mer length
+///
+/// # Returns
+///
+/// A HashMap mapping packed k-mer bits to their counts.
+///
+/// # Errors
+///
+/// Returns an error if the input cannot be read or parsed.
+pub fn count_kmers_from_input_packed(
+    input: &Input,
+    k: KmerLength,
+) -> Result<HashMap<u64, u64>, KmeRustError> {
+    match input {
+        Input::File(path) => count_kmers_streaming_packed(path, k),
+        Input::Stdin => count_kmers_stdin_packed(k),
+    }
+}
+
+/// Internal implementation for counting k-mers from a reader.
+#[cfg(not(feature = "needletail"))]
+fn count_kmers_from_reader_impl<R>(
+    reader: R,
+    k: KmerLength,
+) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    use bio::io::fasta;
+
+    let fasta_reader = fasta::Reader::new(reader);
+    let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+        HashMap::with_hasher(BuildHasherDefault::default());
+
+    for result in fasta_reader.records() {
+        let record = result.map_err(|e| KmeRustError::FastaParse {
+            details: e.to_string(),
+        })?;
+        process_sequence_into_counts(&mut counts, record.seq(), k);
+    }
+
+    Ok(counts.into_iter().collect())
+}
+
+/// Internal implementation for counting k-mers from a reader (needletail version).
+///
+/// Note: needletail requires the reader to be `Send`, so we read into a buffer first.
+#[cfg(feature = "needletail")]
+fn count_kmers_from_reader_impl<R>(
+    mut reader: R,
+    k: KmerLength,
+) -> Result<HashMap<u64, u64>, KmeRustError>
+where
+    R: BufRead,
+{
+    use std::io::Cursor;
+
+    // Read all data into a buffer since needletail requires Send
+    let mut buffer = Vec::new();
+    reader
+        .read_to_end(&mut buffer)
+        .map_err(|e| KmeRustError::FastaParse {
+            details: format!("failed to read input: {e}"),
+        })?;
+
+    let mut parser = needletail::parse_fastx_reader(Cursor::new(buffer)).map_err(|e| {
+        KmeRustError::FastaParse {
+            details: e.to_string(),
+        }
+    })?;
+    let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+        HashMap::with_hasher(BuildHasherDefault::default());
+
+    while let Some(result) = parser.next() {
+        let record = result.map_err(|e| KmeRustError::FastaParse {
+            details: e.to_string(),
+        })?;
+        process_sequence_into_counts(&mut counts, &record.seq(), k);
+    }
+
+    Ok(counts.into_iter().collect())
+}
+
+/// Process a sequence and add k-mer counts to the map.
+fn process_sequence_into_counts(
+    counts: &mut HashMap<u64, u64, BuildHasherDefault<FxHasher>>,
+    seq: &[u8],
+    k: KmerLength,
+) {
+    let k_val = k.get();
+    if seq.len() < k_val {
+        return;
+    }
+
+    let mut i = 0;
+    while i <= seq.len() - k_val {
+        let sub = Bytes::copy_from_slice(&seq[i..i + k_val]);
+
+        match Kmer::from_sub(sub) {
+            Ok(unpacked) => {
+                let canonical = unpacked.pack().canonical();
+                *counts.entry(canonical.packed_bits()).or_insert(0) += 1;
+                i += 1;
+            }
+            Err(err) => {
+                i += err.position + 1;
+            }
+        }
+    }
 }
 
 /// A truly sequential k-mer counter with minimal memory footprint.

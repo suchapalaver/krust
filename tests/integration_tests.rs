@@ -36,9 +36,34 @@ fn cli_missing_args() {
 }
 
 #[test]
-fn cli_missing_path_arg() {
-    let output = kmerust_cmd().arg("5").output().expect("Failed to execute");
-    assert!(!output.status.success());
+fn cli_stdin_default_when_path_omitted() {
+    // When path is omitted, stdin is used as input
+    // Provide a valid FASTA header with empty sequence
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = kmerust_cmd()
+        .arg("5")
+        .arg("--quiet")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    // Write a minimal valid FASTA (header only, no sequence long enough for k=5)
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b">seq\nACGT\n")
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    // Should succeed with valid input (even if no k-mers are long enough)
+    assert!(output.status.success());
+    // Output should be empty since sequence is shorter than k
+    assert!(output.stdout.is_empty());
 }
 
 #[test]
@@ -245,4 +270,130 @@ fn cli_handles_soft_masked_bases() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should contain AAA k-mer with count of 2
     assert!(stdout.contains("AAA\t2"));
+}
+
+#[test]
+fn cli_stdin_with_fasta_content() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fasta_content = b">seq1\nACGTACGT\n";
+
+    let mut child = kmerust_cmd()
+        .args(["4", "-", "--format", "tsv", "--quiet"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    // Write FASTA content to stdin
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fasta_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should contain k-mers from the sequence
+    assert!(stdout.contains("ACGT") || stdout.contains("TACG") || stdout.contains("CGTA"));
+}
+
+#[test]
+fn cli_stdin_pipe_simulation() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    // Simulate: echo ">s\nACGT" | krust 2
+    let fasta_content = b">s\nACGT\n";
+
+    let mut child = kmerust_cmd()
+        .args(["2", "--format", "tsv", "--quiet"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fasta_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // With k=2 on "ACGT", we get: AC, CG, GT
+    // Canonical forms: AC, CG, AC (GT's RC is AC)
+    // So AC appears twice, CG once
+    assert!(!stdout.is_empty());
+}
+
+#[test]
+fn cli_stdin_json_output() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fasta_content = b">seq\nAAAA\n";
+
+    let mut child = kmerust_cmd()
+        .args(["2", "-", "--format", "json", "--quiet"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fasta_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should be valid JSON
+    assert!(stdout.contains('['));
+    assert!(stdout.contains("kmer"));
+    assert!(stdout.contains("AA"));
+}
+
+#[test]
+fn cli_stdin_multiple_sequences() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fasta_content = b">seq1\nACGT\n>seq2\nTGCA\n";
+
+    let mut child = kmerust_cmd()
+        .args(["2", "-", "--format", "tsv", "--quiet"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fasta_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should have processed both sequences
+    assert!(!stdout.is_empty());
 }

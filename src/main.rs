@@ -2,7 +2,7 @@ use std::process;
 
 use clap::Parser;
 use colored::Colorize;
-use kmerust::{cli::Args, run};
+use kmerust::{cli::Args, input::Input, run};
 
 /// Initialize the tracing subscriber with environment filter.
 ///
@@ -20,17 +20,18 @@ fn main() {
     #[cfg(feature = "tracing")]
     init_tracing();
     let args = Args::parse();
+    let input = args.input();
 
-    // Validate that the file exists
-    if !args.path.exists() {
-        eprintln!(
-            "{}\n {}",
-            "Problem with arguments:".blue().bold(),
-            format!("File not found: {}", args.path.display())
-                .blue()
-                .bold()
-        );
-        process::exit(1);
+    // Validate that the file exists (only for file inputs)
+    if let Input::File(ref path) = input {
+        if !path.exists() {
+            eprintln!(
+                "{}\n {}",
+                "Problem with arguments:".blue().bold(),
+                format!("File not found: {}", path.display()).blue().bold()
+            );
+            process::exit(1);
+        }
     }
 
     if !args.quiet {
@@ -42,7 +43,7 @@ fn main() {
         eprintln!(
             "{}: {}",
             "data".bold(),
-            args.path.display().to_string().underline().bold().blue()
+            input.to_string().underline().bold().blue()
         );
         eprintln!(
             "{}: {}",
@@ -70,7 +71,7 @@ fn main() {
         eprintln!();
     }
 
-    if let Err(e) = run::run_with_options(&args.path, args.k, args.format, args.min_count) {
+    if let Err(e) = run::run_with_input(&input, args.k, args.format, args.min_count) {
         eprintln!(
             "{}\n {}",
             "Application error:".blue().bold(),
