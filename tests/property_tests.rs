@@ -4,8 +4,12 @@
 //! catching edge cases that might be missed by example-based tests.
 
 use bytes::Bytes;
+use kmerust::index::{load_index, save_index, KmerIndex};
 use kmerust::kmer::{unpack_to_bytes, unpack_to_string, Kmer, KmerLength};
+use kmerust::streaming::count_kmers_from_sequences;
 use proptest::prelude::*;
+use std::collections::HashMap;
+use tempfile::NamedTempFile;
 
 /// Strategy for generating valid DNA sequences of length 1-32.
 fn dna_sequence(min_len: usize, max_len: usize) -> impl Strategy<Value = String> {
@@ -228,5 +232,93 @@ proptest! {
                 "Invalid base: {}", byte as char
             );
         }
+    }
+
+    /// Index save/load roundtrip should preserve all entries exactly.
+    ///
+    /// Property: load(save(index)) = index
+    #[test]
+    fn index_roundtrip_preserves_all_entries(
+        k in 1usize..=32,
+        entries in proptest::collection::hash_map(any::<u64>(), 1u64..1000, 0..100)
+    ) {
+        let k_len = KmerLength::new(k).unwrap();
+        let index = KmerIndex::new(k_len, entries.clone());
+
+        let tmp = NamedTempFile::with_suffix(".kmix").unwrap();
+        save_index(&index, tmp.path()).unwrap();
+        let loaded = load_index(tmp.path()).unwrap();
+
+        prop_assert_eq!(loaded.k(), k_len);
+        prop_assert_eq!(loaded.counts(), &entries);
+    }
+
+    /// Total k-mer count should not exceed the number of valid windows in the input.
+    ///
+    /// Property: Σ(counts) ≤ (seq.len - k + 1) for a single sequence
+    #[test]
+    fn total_count_at_most_valid_windows(
+        seq in dna_sequence(1, 100),
+        k in 1usize..=32
+    ) {
+        prop_assume!(seq.len() >= k);
+
+        let k_len = KmerLength::new(k).unwrap();
+        let counts = count_kmers_from_sequences(
+            vec![Bytes::from(seq.clone())].into_iter(),
+            k_len
+        );
+
+        let total: u64 = counts.values().sum();
+        let max_windows = (seq.len() - k + 1) as u64;
+
+        prop_assert!(
+            total <= max_windows,
+            "Total count {total} exceeds max windows {max_windows}"
+        );
+    }
+
+    /// A k-mer and its reverse complement should be counted together under one canonical entry.
+    ///
+    /// Property: When counting a k-mer and its reverse complement as separate sequences
+    /// (each of exactly length k), they should produce exactly one canonical entry
+    /// with count 2 (or count 2 for palindromes since they're the same sequence).
+    #[test]
+    fn kmer_and_rc_count_together(seq in dna_sequence(1, 32)) {
+        // Compute reverse complement
+        let rc: String = seq
+            .chars()
+            .rev()
+            .map(|c| match c {
+                'A' => 'T',
+                'T' => 'A',
+                'C' => 'G',
+                'G' => 'C',
+                _ => unreachable!(),
+            })
+            .collect();
+
+        let k = seq.len();
+        let k_len = KmerLength::new(k).unwrap();
+
+        // Count the k-mer and its RC as separate sequences (each exactly k bases)
+        // This ensures we get exactly one k-mer from each sequence
+        let counts: HashMap<u64, u64> = count_kmers_from_sequences(
+            vec![Bytes::from(seq.clone()), Bytes::from(rc.clone())].into_iter(),
+            k_len
+        );
+
+        // Both should map to the same canonical form
+        prop_assert_eq!(
+            counts.len(), 1,
+            "K-mer and RC should produce exactly 1 canonical entry, got {}", counts.len()
+        );
+
+        // Count should be 2 (once from original, once from RC)
+        let kmer_count = *counts.values().next().unwrap();
+        prop_assert_eq!(
+            kmer_count, 2,
+            "K-mer and RC should have combined count 2, got {}", kmer_count
+        );
     }
 }
