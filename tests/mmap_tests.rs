@@ -1,6 +1,7 @@
 //! Tests for memory-mapped I/O support.
 
 #![cfg(feature = "mmap")]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use kmerust::mmap::MmapFasta;
 use kmerust::run::{count_kmers, count_kmers_mmap};

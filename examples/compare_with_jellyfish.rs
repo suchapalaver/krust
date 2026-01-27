@@ -9,6 +9,7 @@
 //! cargo run --example compare_with_jellyfish -- sequences.fa
 //! ```
 //!
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! # Requirements
 //!
 //! For comparison, Jellyfish must be installed and available in PATH:

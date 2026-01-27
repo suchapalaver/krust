@@ -4,6 +4,7 @@
 //! when the tracing feature is enabled.
 
 #![cfg(feature = "tracing")]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use kmerust::run::count_kmers;
 use kmerust::streaming::count_kmers_streaming;

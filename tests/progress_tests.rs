@@ -1,5 +1,7 @@
 //! Tests for progress reporting during k-mer counting.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use kmerust::progress::{Progress, ProgressTracker};
 use kmerust::run::count_kmers_with_progress;
 use std::path::PathBuf;

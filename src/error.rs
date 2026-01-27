@@ -125,19 +125,19 @@ impl std::error::Error for InvalidBaseError {}
 
 impl From<std::io::Error> for KmeRustError {
     fn from(source: std::io::Error) -> Self {
-        KmeRustError::WriteError { source }
+        Self::WriteError { source }
     }
 }
 
 impl From<serde_json::Error> for KmeRustError {
     fn from(source: serde_json::Error) -> Self {
-        KmeRustError::JsonError { source }
+        Self::JsonError { source }
     }
 }
 
 impl From<KmerLengthError> for KmeRustError {
     fn from(err: KmerLengthError) -> Self {
-        KmeRustError::InvalidKmerLength {
+        Self::InvalidKmerLength {
             k: err.k,
             min: err.min,
             max: err.max,
@@ -147,7 +147,7 @@ impl From<KmerLengthError> for KmeRustError {
 
 impl From<InvalidBaseError> for KmeRustError {
     fn from(err: InvalidBaseError) -> Self {
-        KmeRustError::InvalidBase {
+        Self::InvalidBase {
             base: err.base,
             position: err.position,
         }
@@ -184,13 +184,13 @@ pub enum BuilderError {
 
 impl From<Box<dyn std::error::Error>> for BuilderError {
     fn from(err: Box<dyn std::error::Error>) -> Self {
-        BuilderError::Process(err.to_string())
+        Self::Process(err.to_string())
     }
 }
 
 impl From<crate::run::ProcessError> for BuilderError {
     fn from(err: crate::run::ProcessError) -> Self {
-        BuilderError::Process(err.to_string())
+        Self::Process(err.to_string())
     }
 }
 

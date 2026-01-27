@@ -9,6 +9,8 @@
 //! cargo run --example streaming_large_file -- large_genome.fa
 //! ```
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::env;
 use std::process;
 

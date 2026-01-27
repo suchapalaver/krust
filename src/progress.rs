@@ -42,7 +42,8 @@ pub struct ProgressTracker {
 
 impl ProgressTracker {
     /// Create a new progress tracker with zero counts.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             sequences: AtomicU64::new(0),
             bases: AtomicU64::new(0),

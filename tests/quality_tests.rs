@@ -3,6 +3,8 @@
 //! Verifies that the `--min-quality` flag correctly filters out k-mers
 //! containing bases with quality scores below the specified threshold.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use kmerust::format::SequenceFormat;
 use kmerust::run::count_kmers_with_quality;
 use std::path::PathBuf;

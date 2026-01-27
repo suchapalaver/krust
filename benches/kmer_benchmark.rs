@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::uninlined_format_args,
+    clippy::semicolon_if_nothing_returned
+)]
+
 use bytes::Bytes;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use kmerust::kmer::{unpack_to_bytes, Kmer, KmerLength};

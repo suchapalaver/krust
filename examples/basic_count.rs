@@ -8,6 +8,8 @@
 //! cargo run --example basic_count -- sequences.fa
 //! ```
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::env;
 use std::process;
 

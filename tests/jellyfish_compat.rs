@@ -4,6 +4,12 @@
 //! the reference implementation for k-mer counting.
 //!
 //! Tests are marked with `#[ignore]` by default since they require:
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::ignore_without_reason
+)]
+//!
 //! 1. Jellyfish to be installed (`brew install jellyfish` or `apt install jellyfish`)
 //! 2. Additional test fixtures
 //!

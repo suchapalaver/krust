@@ -47,7 +47,7 @@ use crate::{
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -102,7 +102,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Example
 ///
@@ -169,7 +169,7 @@ impl Default for AsyncKmerCounter {
 impl AsyncKmerCounter {
     /// Creates a new async k-mer counter builder.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             k: None,
             min_count: 1,
@@ -188,14 +188,14 @@ impl AsyncKmerCounter {
 
     /// Sets the k-mer length from a pre-validated `KmerLength`.
     #[must_use]
-    pub fn k_validated(mut self, k: KmerLength) -> Self {
+    pub const fn k_validated(mut self, k: KmerLength) -> Self {
         self.k = Some(k);
         self
     }
 
     /// Sets the minimum count threshold.
     #[must_use]
-    pub fn min_count(mut self, min_count: u64) -> Self {
+    pub const fn min_count(mut self, min_count: u64) -> Self {
         self.min_count = min_count;
         self
     }
@@ -268,18 +268,19 @@ impl AsyncKmerCounter {
 
     /// Returns the configured k-mer length, if set.
     #[must_use]
-    pub fn get_k(&self) -> Option<KmerLength> {
+    pub const fn get_k(&self) -> Option<KmerLength> {
         self.k
     }
 
     /// Returns the configured minimum count threshold.
     #[must_use]
-    pub fn get_min_count(&self) -> u64 {
+    pub const fn get_min_count(&self) -> u64 {
         self.min_count
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

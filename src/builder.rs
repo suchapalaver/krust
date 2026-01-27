@@ -92,7 +92,7 @@ impl KmerCounter {
     /// let counter = KmerCounter::new();
     /// ```
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             k: None,
             min_count: 1,
@@ -137,7 +137,7 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::KmerLengthError>(())
     /// ```
     #[must_use]
-    pub fn k_validated(mut self, k: KmerLength) -> Self {
+    pub const fn k_validated(mut self, k: KmerLength) -> Self {
         self.k = Some(k);
         self
     }
@@ -159,7 +159,7 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::KmerLengthError>(())
     /// ```
     #[must_use]
-    pub fn min_count(mut self, min_count: u64) -> Self {
+    pub const fn min_count(mut self, min_count: u64) -> Self {
         self.min_count = min_count;
         self
     }
@@ -178,7 +178,7 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::KmerLengthError>(())
     /// ```
     #[must_use]
-    pub fn format(mut self, format: OutputFormat) -> Self {
+    pub const fn format(mut self, format: OutputFormat) -> Self {
         self.format = format;
         self
     }
@@ -205,14 +205,14 @@ impl KmerCounter {
     /// # Ok::<(), kmerust::error::KmerLengthError>(())
     /// ```
     #[must_use]
-    pub fn input_format(mut self, format: SequenceFormat) -> Self {
+    pub const fn input_format(mut self, format: SequenceFormat) -> Self {
         self.input_format = format;
         self
     }
 
     /// Counts k-mers in the specified sequence file.
     ///
-    /// Returns a HashMap mapping k-mer strings to their counts.
+    /// Returns a `HashMap` mapping k-mer strings to their counts.
     /// Input format is auto-detected from extension unless explicitly set via
     /// [`input_format()`](Self::input_format).
     ///
@@ -527,30 +527,31 @@ impl KmerCounter {
 
     /// Returns the configured k-mer length, if set.
     #[must_use]
-    pub fn get_k(&self) -> Option<KmerLength> {
+    pub const fn get_k(&self) -> Option<KmerLength> {
         self.k
     }
 
     /// Returns the configured minimum count threshold.
     #[must_use]
-    pub fn get_min_count(&self) -> u64 {
+    pub const fn get_min_count(&self) -> u64 {
         self.min_count
     }
 
     /// Returns the configured output format.
     #[must_use]
-    pub fn get_format(&self) -> OutputFormat {
+    pub const fn get_format(&self) -> OutputFormat {
         self.format
     }
 
     /// Returns the configured input format.
     #[must_use]
-    pub fn get_input_format(&self) -> SequenceFormat {
+    pub const fn get_input_format(&self) -> SequenceFormat {
         self.input_format
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::io::Cursor;

@@ -3,6 +3,8 @@
 //! These tests call the library functions directly without going through the CLI,
 //! enabling more precise assertions about behavior and return values.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use kmerust::run::count_kmers;
 use kmerust::streaming::count_kmers_from_reader;
 use std::io::{BufReader, Write};

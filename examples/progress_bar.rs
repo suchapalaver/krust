@@ -9,6 +9,15 @@
 //! cargo run --example progress_bar -- large_genome.fa
 //! ```
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::uninlined_format_args
+)]
+
 use std::env;
 use std::io::{self, Write};
 use std::process;

@@ -79,13 +79,13 @@ impl KmerIndex {
     /// * `k` - The k-mer length
     /// * `counts` - Map from packed canonical k-mer to count
     #[must_use]
-    pub fn new(k: KmerLength, counts: HashMap<u64, u64>) -> Self {
+    pub const fn new(k: KmerLength, counts: HashMap<u64, u64>) -> Self {
         Self { k, counts }
     }
 
     /// Returns the k-mer length.
     #[must_use]
-    pub fn k(&self) -> KmerLength {
+    pub const fn k(&self) -> KmerLength {
         self.k
     }
 
@@ -103,7 +103,7 @@ impl KmerIndex {
 
     /// Returns a reference to the packed counts.
     #[must_use]
-    pub fn counts(&self) -> &HashMap<u64, u64> {
+    pub const fn counts(&self) -> &HashMap<u64, u64> {
         &self.counts
     }
 
@@ -310,7 +310,11 @@ fn read_index<R: Read, P: AsRef<Path>>(reader: R, path: P) -> Result<KmerIndex, 
 
     // Split data and checksum
     let (content, checksum_bytes) = data.split_at(data.len() - 4);
-    let stored_checksum = u32::from_le_bytes(checksum_bytes.try_into().unwrap());
+    // SAFETY: checksum_bytes is always exactly 4 bytes due to split_at
+    let Ok(checksum_array) = checksum_bytes.try_into() else {
+        unreachable!("split_at guarantees exactly 4 bytes");
+    };
+    let stored_checksum = u32::from_le_bytes(checksum_array);
 
     // Verify CRC32
     let computed_checksum = crc32(content);
@@ -356,10 +360,15 @@ fn read_index<R: Read, P: AsRef<Path>>(reader: R, path: P) -> Result<KmerIndex, 
             path: path.to_path_buf(),
         });
     }
-    let count = u64::from_le_bytes(cursor[..8].try_into().unwrap());
+    // SAFETY: length check above guarantees at least 8 bytes
+    let Ok(count_array) = cursor[..8].try_into() else {
+        unreachable!("length check guarantees 8 bytes");
+    };
+    let count = u64::from_le_bytes(count_array);
     cursor = &cursor[8..];
 
     // Validate data size
+    #[allow(clippy::cast_possible_truncation)]
     let expected_data_size = count as usize * 16; // 8 bytes packed + 8 bytes count
     if cursor.len() != expected_data_size {
         return Err(KmeRustError::InvalidIndex {
@@ -372,10 +381,18 @@ fn read_index<R: Read, P: AsRef<Path>>(reader: R, path: P) -> Result<KmerIndex, 
     }
 
     // Read k-mer data
+    #[allow(clippy::cast_possible_truncation)]
     let mut counts = HashMap::with_capacity(count as usize);
     for _ in 0..count {
-        let packed = u64::from_le_bytes(cursor[..8].try_into().unwrap());
-        let kmer_count = u64::from_le_bytes(cursor[8..16].try_into().unwrap());
+        // SAFETY: size validation above guarantees sufficient bytes
+        let Ok(packed_array) = cursor[..8].try_into() else {
+            unreachable!("size validation guarantees 16 bytes per entry");
+        };
+        let Ok(count_array) = cursor[8..16].try_into() else {
+            unreachable!("size validation guarantees 16 bytes per entry");
+        };
+        let packed = u64::from_le_bytes(packed_array);
+        let kmer_count = u64::from_le_bytes(count_array);
         counts.insert(packed, kmer_count);
         cursor = &cursor[16..];
     }
@@ -392,6 +409,7 @@ fn crc32(data: &[u8]) -> u32 {
     let table: [u32; 256] = {
         let mut table = [0u32; 256];
         for (i, entry) in table.iter_mut().enumerate() {
+            #[allow(clippy::cast_possible_truncation)]
             let mut crc = i as u32;
             for _ in 0..8 {
                 if crc & 1 != 0 {
@@ -419,7 +437,7 @@ struct Crc32Writer<W> {
 }
 
 impl<W: Write> Crc32Writer<W> {
-    fn new(inner: W) -> Self {
+    const fn new(inner: W) -> Self {
         Self {
             inner,
             data: Vec::new(),
@@ -451,6 +469,7 @@ fn is_gzip_path(path: &Path) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;

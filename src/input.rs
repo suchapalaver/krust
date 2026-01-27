@@ -36,8 +36,8 @@ pub enum Input {
 impl Input {
     /// Creates an `Input` from a path.
     ///
-    /// If the path is "-", returns [`Input::Stdin`].
-    /// Otherwise, returns [`Input::File`] with the given path.
+    /// If the path is "-", returns [`Self::Stdin`].
+    /// Otherwise, returns [`Self::File`] with the given path.
     ///
     /// # Example
     ///
@@ -54,42 +54,39 @@ impl Input {
     #[must_use]
     pub fn from_path(path: &Path) -> Self {
         if path.as_os_str() == "-" {
-            Input::Stdin
+            Self::Stdin
         } else {
-            Input::File(path.to_path_buf())
+            Self::File(path.to_path_buf())
         }
     }
 
     /// Creates an `Input` from an optional path.
     ///
-    /// If `None` or "-", returns [`Input::Stdin`].
-    /// Otherwise, returns [`Input::File`] with the given path.
+    /// If `None` or "-", returns [`Self::Stdin`].
+    /// Otherwise, returns [`Self::File`] with the given path.
     #[must_use]
     pub fn from_option(path: Option<&Path>) -> Self {
-        match path {
-            Some(p) => Self::from_path(p),
-            None => Input::Stdin,
-        }
+        path.map_or(Self::Stdin, Self::from_path)
     }
 
     /// Returns `true` if this input is stdin.
     #[must_use]
-    pub fn is_stdin(&self) -> bool {
-        matches!(self, Input::Stdin)
+    pub const fn is_stdin(&self) -> bool {
+        matches!(self, Self::Stdin)
     }
 
     /// Returns `true` if this input is a file.
     #[must_use]
-    pub fn is_file(&self) -> bool {
-        matches!(self, Input::File(_))
+    pub const fn is_file(&self) -> bool {
+        matches!(self, Self::File(_))
     }
 
     /// Returns the file path if this is a file input.
     #[must_use]
     pub fn as_path(&self) -> Option<&Path> {
         match self {
-            Input::File(path) => Some(path),
-            Input::Stdin => None,
+            Self::File(path) => Some(path),
+            Self::Stdin => None,
         }
     }
 }
@@ -97,8 +94,8 @@ impl Input {
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Input::File(path) => write!(f, "{}", path.display()),
-            Input::Stdin => write!(f, "<stdin>"),
+            Self::File(path) => write!(f, "{}", path.display()),
+            Self::Stdin => write!(f, "<stdin>"),
         }
     }
 }

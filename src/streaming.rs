@@ -73,7 +73,7 @@ use tracing::{debug, info, info_span};
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -135,7 +135,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Example
 ///
@@ -177,7 +177,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Example
 ///
@@ -231,7 +231,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Errors
 ///
@@ -275,7 +275,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -305,7 +305,7 @@ pub fn count_kmers_stdin(k: usize) -> Result<HashMap<String, u64>, KmeRustError>
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -317,11 +317,13 @@ pub fn count_kmers_stdin_with_format(
     format: SequenceFormat,
 ) -> Result<HashMap<String, u64>, KmeRustError> {
     let k_len = KmerLength::new(k)?;
-    let stdin = std::io::stdin();
-    let reader = stdin.lock();
     // For stdin, resolve format with None path (defaults to FASTA if Auto)
     let resolved_format = format.resolve(None);
-    let packed = count_kmers_from_reader_impl_with_format(reader, k_len, resolved_format)?;
+    let packed = {
+        let stdin = std::io::stdin();
+        let reader = stdin.lock();
+        count_kmers_from_reader_impl_with_format(reader, k_len, resolved_format)?
+    };
 
     Ok(packed
         .into_iter()
@@ -339,7 +341,7 @@ pub fn count_kmers_stdin_with_format(
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Errors
 ///
@@ -363,7 +365,7 @@ pub fn count_kmers_stdin_packed(k: KmerLength) -> Result<HashMap<u64, u64>, KmeR
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -407,7 +409,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Errors
 ///
@@ -448,7 +450,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -491,7 +493,7 @@ pub fn count_kmers_from_input(
 ///
 /// # Returns
 ///
-/// A HashMap mapping packed k-mer bits to their counts.
+/// A `HashMap` mapping packed k-mer bits to their counts.
 ///
 /// # Errors
 ///
@@ -850,7 +852,7 @@ impl StreamingKmerCounter {
         let format = SequenceFormat::from_extension(path_ref);
 
         #[cfg(feature = "tracing")]
-        let _read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
+        let read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
 
         // Read sequences into a Vec for parallel processing
         let sequences: Vec<Bytes> = match format {
@@ -892,12 +894,12 @@ impl StreamingKmerCounter {
 
         #[cfg(feature = "tracing")]
         {
-            drop(_read_span);
+            drop(read_span);
             debug!(sequences = sequences.len(), "Read sequences from file");
         }
 
         #[cfg(feature = "tracing")]
-        let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
+        let process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
             self.process_sequence(seq, None, k, None);
@@ -920,7 +922,7 @@ impl StreamingKmerCounter {
         let is_gzip = path_ref.extension().map(|ext| ext == "gz").unwrap_or(false);
 
         #[cfg(feature = "tracing")]
-        let _read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
+        let read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
 
         // Read sequences into a Vec for parallel processing
         let sequences: Vec<Bytes> = match (format, is_gzip) {
@@ -998,12 +1000,12 @@ impl StreamingKmerCounter {
 
         #[cfg(feature = "tracing")]
         {
-            drop(_read_span);
+            drop(read_span);
             debug!(sequences = sequences.len(), "Read sequences from file");
         }
 
         #[cfg(feature = "tracing")]
-        let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
+        let process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
             self.process_sequence(seq, None, k, None);
@@ -1020,7 +1022,7 @@ impl StreamingKmerCounter {
         let path_ref = path.as_ref();
 
         #[cfg(feature = "tracing")]
-        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
+        let read_span = info_span!("read_fasta", path = ?path_ref).entered();
 
         let mut reader =
             needletail::parse_fastx_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
@@ -1039,7 +1041,7 @@ impl StreamingKmerCounter {
 
         #[cfg(feature = "tracing")]
         {
-            drop(_read_span);
+            drop(read_span);
             debug!(sequences = sequences.len(), "Read sequences from file");
         }
 
@@ -1112,6 +1114,7 @@ impl StreamingKmerCounter {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

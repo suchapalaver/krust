@@ -45,6 +45,7 @@ impl MmapFasta {
     ///
     /// The underlying file must not be modified while this mapping exists.
     /// Modifying a mapped file leads to undefined behavior.
+    #[allow(unsafe_code)]
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let file = File::open(path)?;
         // SAFETY: We rely on the file not being modified while mapped.
@@ -70,6 +71,7 @@ impl MmapFasta {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::io::Write;

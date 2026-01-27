@@ -9,6 +9,7 @@
 //! cargo run --example async_count --features async -- sequences.fa
 //! ```
 //!
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! # Feature Flag
 //!
 //! Requires the `async` feature to be enabled.

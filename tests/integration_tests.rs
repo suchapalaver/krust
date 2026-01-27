@@ -1,3 +1,11 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::stable_sort_primitive
+)]
+
 use std::process::Command;
 
 fn kmerust_cmd() -> Command {

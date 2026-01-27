@@ -96,7 +96,8 @@ impl KmerLength {
     /// assert!(KmerLength::new(0).is_err());
     /// assert!(KmerLength::new(33).is_err());
     /// ```
-    pub fn new(k: usize) -> Result<Self, KmerLengthError> {
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn new(k: usize) -> Result<Self, KmerLengthError> {
         if k < Self::MIN as usize || k > Self::MAX as usize {
             return Err(KmerLengthError {
                 k,
@@ -104,6 +105,7 @@ impl KmerLength {
                 max: Self::MAX,
             });
         }
+        // SAFETY: range check above guarantees k fits in u8
         Ok(Self(k as u8))
     }
 
@@ -124,6 +126,7 @@ impl KmerLength {
     /// assert_eq!(k.get(), 21);
     /// ```
     #[inline]
+    #[allow(unsafe_code)]
     pub const unsafe fn new_unchecked(k: u8) -> Self {
         Self(k)
     }
@@ -227,7 +230,7 @@ impl Default for Kmer<Unpacked> {
 impl<S> Kmer<S> {
     /// Returns the k-mer bytes.
     #[inline]
-    pub fn bytes(&self) -> &Bytes {
+    pub const fn bytes(&self) -> &Bytes {
         &self.bytes
     }
 }
@@ -259,6 +262,7 @@ impl Kmer<Unpacked> {
     /// let result = Kmer::from_sub(Bytes::from_static(b"GANTACA"));
     /// assert!(result.is_err());
     /// ```
+    #[allow(clippy::needless_pass_by_value)]
     pub fn from_sub(sub: Bytes) -> Result<Self, InvalidBaseError> {
         let normalized: Result<Vec<u8>, InvalidBaseError> = sub
             .iter()
@@ -311,7 +315,7 @@ impl Kmer<Unpacked> {
 impl Kmer<Packed> {
     /// Returns the packed 64-bit representation.
     #[inline]
-    pub fn packed_bits(&self) -> u64 {
+    pub const fn packed_bits(&self) -> u64 {
         self.packed_bits
     }
 
@@ -389,13 +393,13 @@ impl Kmer<Packed> {
 impl Kmer<Canonical> {
     /// Returns the canonical packed 64-bit representation.
     #[inline]
-    pub fn packed_bits(&self) -> u64 {
+    pub const fn packed_bits(&self) -> u64 {
         self.packed_bits
     }
 
     /// Returns whether this k-mer was converted to its reverse complement.
     #[inline]
-    pub fn is_reverse_complement(&self) -> bool {
+    pub const fn is_reverse_complement(&self) -> bool {
         self.is_reverse_complement
     }
 }
@@ -443,6 +447,7 @@ pub fn unpack_to_bytes(packed_bits: u64, k: KmerLength) -> Bytes {
 ///
 /// This function uses `String::from_utf8_unchecked` internally because
 /// the unpacking process only produces valid ASCII bytes (A, C, G, T).
+#[allow(unsafe_code)]
 pub fn unpack_to_string(packed_bits: u64, k: KmerLength) -> String {
     let bytes = unpack_to_bytes(packed_bits, k);
     // SAFETY: unpack_to_bytes only produces bytes from KmerByte (A, C, G, T),
@@ -481,7 +486,7 @@ pub enum KmerByte {
 }
 
 impl From<&u8> for KmerByte {
-    /// Converts a validated DNA base byte to KmerByte.
+    /// Converts a validated DNA base byte to `KmerByte`.
     ///
     /// # Safety Invariant
     ///
@@ -494,10 +499,10 @@ impl From<&u8> for KmerByte {
             "KmerByte::from called with invalid base: {val:#x}"
         );
         match val {
-            b'A' | b'a' => KmerByte::A,
-            b'C' | b'c' => KmerByte::C,
-            b'G' | b'g' => KmerByte::G,
-            b'T' | b't' => KmerByte::T,
+            b'A' | b'a' => Self::A,
+            b'C' | b'c' => Self::C,
+            b'G' | b'g' => Self::G,
+            b'T' | b't' => Self::T,
             // SAFETY: Caller must ensure input is a valid DNA base.
             // This is guaranteed when called from Kmer methods after validation.
             _ => unreachable!("invalid base passed to KmerByte::from"),
@@ -517,7 +522,7 @@ impl From<KmerByte> for u8 {
 }
 
 impl From<u64> for KmerByte {
-    /// Converts a 2-bit encoded value (0-3) to KmerByte.
+    /// Converts a 2-bit encoded value (0-3) to `KmerByte`.
     ///
     /// # Safety Invariant
     ///
@@ -530,10 +535,10 @@ impl From<u64> for KmerByte {
             "KmerByte::from called with invalid 2-bit value: {val}"
         );
         match val {
-            0 => KmerByte::A,
-            1 => KmerByte::C,
-            2 => KmerByte::G,
-            3 => KmerByte::T,
+            0 => Self::A,
+            1 => Self::C,
+            2 => Self::G,
+            3 => Self::T,
             // SAFETY: Caller must ensure input is a valid 2-bit value (0-3).
             // This is guaranteed when called from unpack functions with masked bits.
             _ => unreachable!("invalid 2-bit value passed to KmerByte::from"),
@@ -553,7 +558,7 @@ impl From<KmerByte> for u64 {
 }
 
 impl KmerByte {
-    /// Fallibly converts a DNA base byte to KmerByte.
+    /// Fallibly converts a DNA base byte to `KmerByte`.
     ///
     /// Returns `Ok` for valid bases (A, C, G, T, case-insensitive),
     /// or `Err` for invalid bytes.
@@ -566,12 +571,12 @@ impl KmerByte {
     /// assert!(KmerByte::try_from_byte(b'A').is_ok());
     /// assert!(KmerByte::try_from_byte(b'N').is_err());
     /// ```
-    pub fn try_from_byte(val: u8) -> Result<Self, InvalidBaseError> {
+    pub const fn try_from_byte(val: u8) -> Result<Self, InvalidBaseError> {
         match val {
-            b'A' | b'a' => Ok(KmerByte::A),
-            b'C' | b'c' => Ok(KmerByte::C),
-            b'G' | b'g' => Ok(KmerByte::G),
-            b'T' | b't' => Ok(KmerByte::T),
+            b'A' | b'a' => Ok(Self::A),
+            b'C' | b'c' => Ok(Self::C),
+            b'G' | b'g' => Ok(Self::G),
+            b'T' | b't' => Ok(Self::T),
             _ => Err(InvalidBaseError {
                 base: val,
                 position: 0,
@@ -579,7 +584,7 @@ impl KmerByte {
         }
     }
 
-    /// Fallibly converts a 2-bit encoded value to KmerByte.
+    /// Fallibly converts a 2-bit encoded value to `KmerByte`.
     ///
     /// Returns `Ok` for values 0-3, or `Err` for values outside that range.
     ///
@@ -592,12 +597,14 @@ impl KmerByte {
     /// assert!(KmerByte::try_from_bits(3).is_ok()); // T
     /// assert!(KmerByte::try_from_bits(4).is_err());
     /// ```
-    pub fn try_from_bits(val: u64) -> Result<Self, InvalidBaseError> {
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn try_from_bits(val: u64) -> Result<Self, InvalidBaseError> {
         match val {
-            0 => Ok(KmerByte::A),
-            1 => Ok(KmerByte::C),
-            2 => Ok(KmerByte::G),
-            3 => Ok(KmerByte::T),
+            0 => Ok(Self::A),
+            1 => Ok(Self::C),
+            2 => Ok(Self::G),
+            3 => Ok(Self::T),
+            // SAFETY: truncation is fine here as we're only interested in low bits
             _ => Err(InvalidBaseError {
                 base: val as u8,
                 position: 0,
@@ -605,7 +612,8 @@ impl KmerByte {
         }
     }
 
-    pub fn reverse_complement(self) -> Self {
+    #[must_use]
+    pub const fn reverse_complement(self) -> Self {
         match self {
             Self::A => Self::T,
             Self::C => Self::G,
@@ -616,6 +624,7 @@ impl KmerByte {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 pub mod test {
     use super::*;
 

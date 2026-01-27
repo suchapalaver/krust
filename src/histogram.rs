@@ -50,7 +50,7 @@ pub struct HistogramStats {
     pub mode_count: u64,
     /// Number of k-mers that have the mode count.
     pub mode_frequency: u64,
-    /// Average k-mer count (total_kmers / distinct_kmers).
+    /// Average k-mer count (`total_kmers` / `distinct_kmers`).
     pub mean_count: f64,
 }
 
@@ -61,11 +61,11 @@ pub struct HistogramStats {
 ///
 /// # Arguments
 ///
-/// * `counts` - A HashMap mapping k-mer strings to their counts
+/// * `counts` - A `HashMap` mapping k-mer strings to their counts
 ///
 /// # Returns
 ///
-/// A `KmerHistogram` (BTreeMap) mapping count -> frequency.
+/// A `KmerHistogram` (`BTreeMap`) mapping count -> frequency.
 ///
 /// # Example
 ///
@@ -84,6 +84,7 @@ pub struct HistogramStats {
 /// assert_eq!(hist.get(&10), Some(&1)); // 1 k-mer with count 10
 /// ```
 #[must_use]
+#[allow(clippy::implicit_hasher)]
 pub fn compute_histogram(counts: &HashMap<String, u64>) -> KmerHistogram {
     let mut histogram = BTreeMap::new();
     for &count in counts.values() {
@@ -99,12 +100,13 @@ pub fn compute_histogram(counts: &HashMap<String, u64>) -> KmerHistogram {
 ///
 /// # Arguments
 ///
-/// * `counts` - A HashMap mapping packed k-mer bits to their counts
+/// * `counts` - A `HashMap` mapping packed k-mer bits to their counts
 ///
 /// # Returns
 ///
-/// A `KmerHistogram` (BTreeMap) mapping count -> frequency.
+/// A `KmerHistogram` (`BTreeMap`) mapping count -> frequency.
 #[must_use]
+#[allow(clippy::implicit_hasher)]
 pub fn compute_histogram_packed(counts: &HashMap<u64, u64>) -> KmerHistogram {
     let mut histogram = BTreeMap::new();
     for &count in counts.values() {
@@ -150,14 +152,14 @@ pub fn histogram_stats(histogram: &KmerHistogram) -> HistogramStats {
     let (mode_count, mode_frequency) = histogram
         .iter()
         .max_by_key(|(_, f)| *f)
-        .map(|(&c, &f)| (c, f))
-        .unwrap_or((0, 0));
+        .map_or((0, 0), |(&c, &f)| (c, f));
 
     HistogramStats {
         total_kmers: total,
         distinct_kmers: distinct,
         mode_count,
         mode_frequency,
+        #[allow(clippy::cast_precision_loss)]
         mean_count: if distinct > 0 {
             total as f64 / distinct as f64
         } else {

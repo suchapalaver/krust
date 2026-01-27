@@ -3,6 +3,8 @@
 //! Verifies that the streaming APIs (`count_kmers_streaming`, `count_kmers_sequential`)
 //! correctly handle FASTQ files with automatic format detection.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::similar_names)]
+
 use kmerust::streaming::{count_kmers_sequential, count_kmers_streaming};
 use std::path::PathBuf;
 

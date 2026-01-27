@@ -49,7 +49,7 @@ impl SequenceFormat {
         let ext = path
             .extension()
             .and_then(OsStr::to_str)
-            .map(|e| e.to_lowercase());
+            .map(str::to_lowercase);
 
         let effective_ext = match ext.as_deref() {
             Some("gz") => {
@@ -57,15 +57,15 @@ impl SequenceFormat {
                 path.file_stem()
                     .and_then(|stem| Path::new(stem).extension())
                     .and_then(OsStr::to_str)
-                    .map(|e| e.to_lowercase())
+                    .map(str::to_lowercase)
             }
             other => other.map(String::from),
         };
 
         match effective_ext.as_deref() {
             Some("fq" | "fastq") => Self::Fastq,
-            Some("fa" | "fasta" | "fna") => Self::Fasta,
-            _ => Self::Fasta, // Default to FASTA for unknown extensions
+            // Default to FASTA for known FASTA extensions and unknown extensions
+            _ => Self::Fasta,
         }
     }
 
@@ -103,13 +103,13 @@ impl SequenceFormat {
 
     /// Returns `true` if this format is FASTQ.
     #[must_use]
-    pub fn is_fastq(self) -> bool {
+    pub const fn is_fastq(self) -> bool {
         matches!(self, Self::Fastq)
     }
 
     /// Returns `true` if this format is FASTA.
     #[must_use]
-    pub fn is_fasta(self) -> bool {
+    pub const fn is_fasta(self) -> bool {
         matches!(self, Self::Fasta)
     }
 }

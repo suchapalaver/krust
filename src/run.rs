@@ -199,7 +199,7 @@ pub fn run_with_quality(
     output_counts(counts, output_format, min_count)
 }
 
-/// Counts k-mers and returns them as a HashMap.
+/// Counts k-mers and returns them as a `HashMap`.
 ///
 /// This is the main library API for counting k-mers without writing to stdout.
 /// Input format is auto-detected from the file extension.
@@ -211,7 +211,7 @@ pub fn run_with_quality(
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -235,7 +235,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -257,20 +257,20 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _read_span = info_span!("read_sequences", path = ?path).entered();
+    let read_span = info_span!("read_sequences", path = ?path).entered();
 
     let sequences = read(&path, format)?;
 
     #[cfg(feature = "tracing")]
-    drop(_read_span);
+    drop(read_span);
 
     #[cfg(feature = "tracing")]
-    let _process_span = info_span!("process_sequences").entered();
+    let process_span = info_span!("process_sequences").entered();
 
-    let kmer_map = KmerMap::new().build(sequences, k)?;
+    let kmer_map = KmerMap::new().build(sequences, k);
 
     #[cfg(feature = "tracing")]
-    drop(_process_span);
+    drop(process_span);
 
     let result = kmer_map.into_hashmap(k_len);
 
@@ -294,7 +294,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -317,20 +317,20 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _read_span = info_span!("read_sequences", path = ?path).entered();
+    let read_span = info_span!("read_sequences", path = ?path).entered();
 
     let sequences = read_with_quality(&path, format)?;
 
     #[cfg(feature = "tracing")]
-    drop(_read_span);
+    drop(read_span);
 
     #[cfg(feature = "tracing")]
-    let _process_span = info_span!("process_sequences").entered();
+    let process_span = info_span!("process_sequences").entered();
 
-    let kmer_map = KmerMap::new().build_with_quality(sequences, k, min_quality)?;
+    let kmer_map = KmerMap::new().build_with_quality(sequences, k, min_quality);
 
     #[cfg(feature = "tracing")]
-    drop(_process_span);
+    drop(process_span);
 
     let result = kmer_map.into_hashmap(k_len);
 
@@ -357,7 +357,7 @@ where
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -397,22 +397,22 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _read_span = info_span!("read_sequences", path = ?path).entered();
+    let read_span = info_span!("read_sequences", path = ?path).entered();
 
     let sequences = read(&path, SequenceFormat::Auto)?;
 
     #[cfg(feature = "tracing")]
-    drop(_read_span);
+    drop(read_span);
 
     #[cfg(feature = "tracing")]
-    let _process_span = info_span!("process_sequences").entered();
+    let process_span = info_span!("process_sequences").entered();
 
     let tracker = Arc::new(ProgressTracker::new());
     let callback = Arc::new(callback);
-    let kmer_map = KmerMapWithProgress::new(tracker, callback).build(sequences, k)?;
+    let kmer_map = KmerMapWithProgress::new(tracker, callback).build(sequences, k);
 
     #[cfg(feature = "tracing")]
-    drop(_process_span);
+    drop(process_span);
 
     let result = kmer_map.into_hashmap(k_len);
 
@@ -429,7 +429,7 @@ where
 ///
 /// # Arguments
 ///
-/// * `counts` - HashMap of k-mer strings to their counts
+/// * `counts` - `HashMap` of k-mer strings to their counts
 /// * `format` - Output format (Fasta, Tsv, Json, or Histogram)
 /// * `min_count` - Minimum count threshold (k-mers below this are excluded)
 ///
@@ -437,6 +437,7 @@ where
 ///
 /// Returns `ProcessError::WriteError` if output cannot be written.
 /// Returns `ProcessError::JsonError` if JSON serialization fails.
+#[allow(clippy::implicit_hasher)]
 pub fn output_counts(
     counts: HashMap<String, u64>,
     format: OutputFormat,
@@ -484,7 +485,7 @@ pub fn output_counts(
     Ok(())
 }
 
-/// A custom `DashMap` w/ `FxHasher`.
+/// A custom [`DashMap`] w/ [`FxHasher`].
 type DashFx = DashMap<u64, u64, BuildHasherDefault<FxHasher>>;
 
 struct KmerMap(DashFx);
@@ -496,13 +497,9 @@ impl KmerMap {
         ))
     }
 
-    fn build(
-        self,
-        sequences: rayon::vec::IntoIter<Bytes>,
-        k: usize,
-    ) -> Result<Self, Box<dyn Error>> {
+    fn build(self, sequences: rayon::vec::IntoIter<Bytes>, k: usize) -> Self {
         sequences.for_each(|seq| self.process_sequence(&seq, k));
-        Ok(self)
+        self
     }
 
     fn build_with_quality(
@@ -510,7 +507,7 @@ impl KmerMap {
         sequences: rayon::vec::IntoIter<SequenceWithQuality>,
         k: usize,
         min_quality: Option<u8>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Self {
         sequences.for_each(|seq_qual| {
             self.process_sequence_with_quality(
                 &seq_qual.seq,
@@ -519,7 +516,7 @@ impl KmerMap {
                 min_quality,
             );
         });
-        Ok(self)
+        self
     }
 
     fn process_sequence(&self, seq: &Bytes, k: usize) {
@@ -601,11 +598,8 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
         }
     }
 
-    fn build(
-        self,
-        sequences: rayon::vec::IntoIter<Bytes>,
-        k: usize,
-    ) -> Result<Self, Box<dyn Error>> {
+    #[allow(clippy::cast_possible_truncation)]
+    fn build(self, sequences: rayon::vec::IntoIter<Bytes>, k: usize) -> Self {
         use rayon::prelude::ParallelIterator;
 
         sequences.for_each(|seq| {
@@ -614,7 +608,7 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
             self.tracker.record_sequence(len);
             (self.callback)(self.tracker.snapshot());
         });
-        Ok(self)
+        self
     }
 
     fn process_sequence(&self, seq: &Bytes, k: usize) {
@@ -671,7 +665,7 @@ impl<F: Fn(Progress) + Send + Sync + 'static> KmerMapWithProgress<F> {
 ///
 /// # Returns
 ///
-/// A HashMap mapping k-mer strings to their counts.
+/// A `HashMap` mapping k-mer strings to their counts.
 ///
 /// # Errors
 ///
@@ -710,7 +704,7 @@ where
     let k_len = KmerLength::new(k)?;
 
     #[cfg(feature = "tracing")]
-    let _mmap_span = info_span!("mmap_fasta", path = ?path).entered();
+    let mmap_span = info_span!("mmap_fasta", path = ?path).entered();
 
     let mmap =
         crate::mmap::MmapFasta::open(&path).map_err(|e| crate::error::KmeRustError::MmapError {
@@ -720,12 +714,12 @@ where
 
     #[cfg(feature = "tracing")]
     {
-        drop(_mmap_span);
+        drop(mmap_span);
         debug!(size_bytes = mmap.len(), "Memory-mapped file");
     }
 
     #[cfg(feature = "tracing")]
-    let _process_span = info_span!("process_sequences").entered();
+    let process_span = info_span!("process_sequences").entered();
 
     // Parse FASTA from the memory-mapped bytes
     let cursor = Cursor::new(mmap.as_bytes());
@@ -748,7 +742,7 @@ where
         .for_each(|seq| kmer_map.process_sequence(&seq, k));
 
     #[cfg(feature = "tracing")]
-    drop(_process_span);
+    drop(process_span);
 
     let result = kmer_map.into_hashmap(k_len);
 

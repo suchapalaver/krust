@@ -3,6 +3,13 @@
 //! These tests verify invariants that should hold across all valid inputs,
 //! catching edge cases that might be missed by example-based tests.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::redundant_clone,
+    clippy::explicit_iter_loop
+)]
+
 use bytes::Bytes;
 use kmerust::index::{load_index, save_index, KmerIndex};
 use kmerust::kmer::{unpack_to_bytes, unpack_to_string, Kmer, KmerLength};

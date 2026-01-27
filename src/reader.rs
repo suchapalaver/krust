@@ -79,7 +79,7 @@ fn records_to_bytes_with_quality<R: SequenceRecord>(
 }
 
 #[cfg(all(not(feature = "needletail"), not(feature = "gzip")))]
-pub(crate) fn read<P: AsRef<Path> + Debug>(
+pub fn read<P: AsRef<Path> + Debug>(
     path: P,
     format: SequenceFormat,
 ) -> Result<IntoIter<Bytes>, Box<dyn Error>> {
@@ -100,7 +100,7 @@ pub(crate) fn read<P: AsRef<Path> + Debug>(
 }
 
 #[cfg(all(not(feature = "needletail"), feature = "gzip"))]
-pub(crate) fn read<P: AsRef<Path> + Debug>(
+pub fn read<P: AsRef<Path> + Debug>(
     path: P,
     format: SequenceFormat,
 ) -> Result<IntoIter<Bytes>, Box<dyn Error>> {
@@ -144,7 +144,7 @@ pub(crate) fn read<P: AsRef<Path> + Debug>(
 }
 
 #[cfg(feature = "needletail")]
-pub(crate) fn read<P: AsRef<Path> + Debug>(
+pub fn read<P: AsRef<Path> + Debug>(
     path: P,
     _format: SequenceFormat,
 ) -> Result<IntoIter<Bytes>, Box<dyn Error>> {
@@ -164,7 +164,7 @@ pub(crate) fn read<P: AsRef<Path> + Debug>(
 /// For FASTA input, quality is always `None`.
 /// For FASTQ input, quality contains the Phred+33 encoded quality scores.
 #[cfg(all(not(feature = "needletail"), not(feature = "gzip")))]
-pub(crate) fn read_with_quality<P: AsRef<Path> + Debug>(
+pub fn read_with_quality<P: AsRef<Path> + Debug>(
     path: P,
     format: SequenceFormat,
 ) -> Result<IntoIter<SequenceWithQuality>, Box<dyn Error>> {
@@ -186,7 +186,7 @@ pub(crate) fn read_with_quality<P: AsRef<Path> + Debug>(
 
 /// Reads sequences with quality scores from a file (gzip version).
 #[cfg(all(not(feature = "needletail"), feature = "gzip"))]
-pub(crate) fn read_with_quality<P: AsRef<Path> + Debug>(
+pub fn read_with_quality<P: AsRef<Path> + Debug>(
     path: P,
     format: SequenceFormat,
 ) -> Result<IntoIter<SequenceWithQuality>, Box<dyn Error>> {
@@ -231,7 +231,7 @@ pub(crate) fn read_with_quality<P: AsRef<Path> + Debug>(
 
 /// Reads sequences with quality scores from a file (needletail version).
 #[cfg(feature = "needletail")]
-pub(crate) fn read_with_quality<P: AsRef<Path> + Debug>(
+pub fn read_with_quality<P: AsRef<Path> + Debug>(
     path: P,
     _format: SequenceFormat,
 ) -> Result<IntoIter<SequenceWithQuality>, Box<dyn Error>> {

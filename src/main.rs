@@ -1,3 +1,11 @@
+#![allow(
+    clippy::too_many_lines,
+    clippy::needless_pass_by_value,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::redundant_clone
+)]
+
 use std::process;
 
 use clap::Parser;
