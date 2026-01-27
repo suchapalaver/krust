@@ -144,7 +144,7 @@ fn run_count(args: Args) {
 
         // Convert to packed counts for the index
         let k_len = KmerLength::new(args.k).unwrap();
-        let packed_counts = counts_to_packed(&counts, k_len);
+        let packed_counts = counts_to_packed(&counts);
 
         // Save the index
         let index = KmerIndex::new(k_len, packed_counts);
@@ -236,7 +236,6 @@ fn run_query(args: QueryArgs) {
 /// Convert string-keyed counts to packed representation.
 fn counts_to_packed(
     counts: &std::collections::HashMap<String, u64>,
-    _k: KmerLength,
 ) -> std::collections::HashMap<u64, u64> {
     use bytes::Bytes;
 
