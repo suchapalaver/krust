@@ -1,7 +1,8 @@
 //! Streaming k-mer counting for memory-efficient processing of large files.
 //!
-//! This module provides APIs that process FASTA files without loading all sequences
-//! into memory simultaneously, making it suitable for very large genomic datasets.
+//! This module provides APIs that process FASTA and FASTQ files without loading all
+//! sequences into memory simultaneously, making it suitable for very large genomic
+//! datasets. File format is auto-detected from the file extension.
 //!
 //! # API Variants
 //!
@@ -55,15 +56,19 @@ use crate::{
 #[cfg(feature = "tracing")]
 use tracing::{debug, info, info_span};
 
-/// Counts k-mers in a FASTA file using streaming I/O.
+/// Counts k-mers in a FASTA or FASTQ file using streaming I/O.
 ///
 /// Processes sequences one at a time without loading the entire file into memory.
 /// This is more memory-efficient than [`count_kmers`](crate::run::count_kmers) for
 /// very large files.
 ///
+/// File format is auto-detected from the extension:
+/// - `.fa`, `.fasta`, `.fna` (and `.gz` variants) → FASTA
+/// - `.fq`, `.fastq` (and `.gz` variants) → FASTQ
+///
 /// # Arguments
 ///
-/// * `path` - Path to the FASTA file
+/// * `path` - Path to the FASTA/FASTQ file
 /// * `k` - K-mer length (must be 1-32)
 ///
 /// # Returns
@@ -81,7 +86,9 @@ use tracing::{debug, info, info_span};
 /// ```rust,no_run
 /// use kmerust::streaming::count_kmers_streaming;
 ///
+/// // Works with both FASTA and FASTQ
 /// let counts = count_kmers_streaming("large_genome.fa", 21)?;
+/// let counts = count_kmers_streaming("reads.fq.gz", 21)?;
 /// println!("Found {} unique k-mers", counts.len());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -117,9 +124,13 @@ where
 /// This is the most efficient API for k-mer counting when you need to do
 /// further processing on the results. It avoids string allocation entirely.
 ///
+/// File format is auto-detected from the extension:
+/// - `.fa`, `.fasta`, `.fna` (and `.gz` variants) → FASTA
+/// - `.fq`, `.fastq` (and `.gz` variants) → FASTQ
+///
 /// # Arguments
 ///
-/// * `path` - Path to the FASTA file
+/// * `path` - Path to the FASTA/FASTQ file
 /// * `k` - Validated k-mer length
 ///
 /// # Returns
@@ -134,6 +145,7 @@ where
 ///
 /// let k = KmerLength::new(21)?;
 /// let counts = count_kmers_streaming_packed("genome.fa", k)?;
+/// let counts = count_kmers_streaming_packed("reads.fq.gz", k)?;
 ///
 /// // Process packed bits directly without string conversion
 /// for (packed_bits, count) in counts {
@@ -198,6 +210,10 @@ where
 /// This provides the lowest possible peak memory usage at the cost of being
 /// single-threaded.
 ///
+/// File format is auto-detected from the extension:
+/// - `.fa`, `.fasta`, `.fna` (and `.gz` variants) → FASTA
+/// - `.fq`, `.fastq` (and `.gz` variants) → FASTQ
+///
 /// # When to Use
 ///
 /// Use this function when:
@@ -210,7 +226,7 @@ where
 ///
 /// # Arguments
 ///
-/// * `path` - Path to the FASTA file
+/// * `path` - Path to the FASTA/FASTQ file
 /// * `k` - K-mer length (must be 1-32)
 ///
 /// # Returns
@@ -229,6 +245,7 @@ where
 /// use kmerust::streaming::count_kmers_sequential;
 ///
 /// let counts = count_kmers_sequential("huge_genome.fa", 21)?;
+/// let counts = count_kmers_sequential("reads.fq.gz", 21)?;
 /// println!("Found {} unique k-mers", counts.len());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -643,12 +660,13 @@ impl SequentialKmerCounter {
     where
         P: AsRef<Path> + Debug,
     {
-        use bio::io::fasta;
+        use bio::io::{fasta, fastq};
 
         let path_ref = path.as_ref();
+        let format = SequenceFormat::from_extension(path_ref);
 
         #[cfg(feature = "tracing")]
-        let _span = info_span!("sequential_count", path = ?path_ref).entered();
+        let _span = info_span!("sequential_count", path = ?path_ref, ?format).entered();
 
         // Handle gzip if the feature is enabled
         #[cfg(feature = "gzip")]
@@ -664,30 +682,62 @@ impl SequentialKmerCounter {
                 path: path_ref.to_path_buf(),
             })?;
             let decoder = GzDecoder::new(file);
-            let reader = fasta::Reader::new(BufReader::new(decoder));
+            let buf_reader = BufReader::new(decoder);
 
-            for result in reader.records() {
-                let record = result.map_err(|e| KmeRustError::SequenceParse {
-                    details: e.to_string(),
-                })?;
-                self.process_sequence(record.seq(), k);
+            match format {
+                SequenceFormat::Fastq => {
+                    let reader = fastq::Reader::new(buf_reader);
+                    for result in reader.records() {
+                        let record = result.map_err(|e| KmeRustError::SequenceParse {
+                            details: e.to_string(),
+                        })?;
+                        self.process_sequence(record.seq(), k);
+                    }
+                }
+                SequenceFormat::Fasta | SequenceFormat::Auto => {
+                    let reader = fasta::Reader::new(buf_reader);
+                    for result in reader.records() {
+                        let record = result.map_err(|e| KmeRustError::SequenceParse {
+                            details: e.to_string(),
+                        })?;
+                        self.process_sequence(record.seq(), k);
+                    }
+                }
             }
 
             return Ok(self.counts.into_iter().collect());
         }
 
-        let reader =
-            fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
-                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
-                path: path_ref.to_path_buf(),
-            })?;
+        // Non-gzip path
+        match format {
+            SequenceFormat::Fastq => {
+                let reader =
+                    fastq::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
 
-        // Process each record immediately as it's read - no batching
-        for result in reader.records() {
-            let record = result.map_err(|e| KmeRustError::SequenceParse {
-                details: e.to_string(),
-            })?;
-            self.process_sequence(record.seq(), k);
+                for result in reader.records() {
+                    let record = result.map_err(|e| KmeRustError::SequenceParse {
+                        details: e.to_string(),
+                    })?;
+                    self.process_sequence(record.seq(), k);
+                }
+            }
+            SequenceFormat::Fasta | SequenceFormat::Auto => {
+                let reader =
+                    fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
+
+                for result in reader.records() {
+                    let record = result.map_err(|e| KmeRustError::SequenceParse {
+                        details: e.to_string(),
+                    })?;
+                    self.process_sequence(record.seq(), k);
+                }
+            }
         }
 
         Ok(self.counts.into_iter().collect())
@@ -761,39 +811,63 @@ impl StreamingKmerCounter {
     where
         P: AsRef<Path> + Debug,
     {
-        use bio::io::fasta;
+        use bio::io::{fasta, fastq};
 
         let path_ref = path.as_ref();
+        let format = SequenceFormat::from_extension(path_ref);
 
         #[cfg(feature = "tracing")]
-        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
+        let _read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
 
-        let reader =
-            fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
-                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
-                path: path_ref.to_path_buf(),
-            })?;
-
-        // Process records in parallel chunks for efficiency while maintaining streaming behavior
-        let records: Vec<_> = reader
-            .records()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| KmeRustError::SequenceParse {
-                details: e.to_string(),
-            })?;
+        // Read sequences into a Vec for parallel processing
+        let sequences: Vec<Bytes> = match format {
+            SequenceFormat::Fastq => {
+                let reader =
+                    fastq::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+            SequenceFormat::Fasta | SequenceFormat::Auto => {
+                let reader =
+                    fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+        };
 
         #[cfg(feature = "tracing")]
         {
             drop(_read_span);
-            debug!(sequences = records.len(), "Read sequences from file");
+            debug!(sequences = sequences.len(), "Read sequences from file");
         }
 
         #[cfg(feature = "tracing")]
-        let _process_span = info_span!("process_sequences", count = records.len()).entered();
+        let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
-        records.par_iter().for_each(|record| {
-            let seq = Bytes::copy_from_slice(record.seq());
-            self.process_sequence(&seq, k);
+        sequences.par_iter().for_each(|seq| {
+            self.process_sequence(seq, k);
         });
 
         Ok(self.counts.into_iter().collect())
@@ -804,56 +878,102 @@ impl StreamingKmerCounter {
     where
         P: AsRef<Path> + Debug,
     {
-        use bio::io::fasta;
+        use bio::io::{fasta, fastq};
         use flate2::read::GzDecoder;
         use std::{fs::File, io::BufReader};
 
         let path_ref = path.as_ref();
-
-        #[cfg(feature = "tracing")]
-        let _read_span = info_span!("read_fasta", path = ?path_ref).entered();
-
+        let format = SequenceFormat::from_extension(path_ref);
         let is_gzip = path_ref.extension().map(|ext| ext == "gz").unwrap_or(false);
 
-        let records: Vec<bio::io::fasta::Record> = if is_gzip {
-            let file = File::open(path_ref).map_err(|e| KmeRustError::SequenceRead {
-                source: e,
-                path: path_ref.to_path_buf(),
-            })?;
-            let decoder = GzDecoder::new(file);
-            let reader = fasta::Reader::new(BufReader::new(decoder));
-            reader
-                .records()
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| KmeRustError::SequenceParse {
-                    details: e.to_string(),
-                })?
-        } else {
-            let reader =
-                fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
-                    source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+        #[cfg(feature = "tracing")]
+        let _read_span = info_span!("read_sequences", path = ?path_ref, ?format).entered();
+
+        // Read sequences into a Vec for parallel processing
+        let sequences: Vec<Bytes> = match (format, is_gzip) {
+            (SequenceFormat::Fastq, true) => {
+                let file = File::open(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                    source: e,
                     path: path_ref.to_path_buf(),
                 })?;
-            reader
-                .records()
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| KmeRustError::SequenceParse {
-                    details: e.to_string(),
-                })?
+                let decoder = GzDecoder::new(file);
+                let reader = fastq::Reader::new(BufReader::new(decoder));
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+            (SequenceFormat::Fastq, false) => {
+                let reader =
+                    fastq::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+            (SequenceFormat::Fasta | SequenceFormat::Auto, true) => {
+                let file = File::open(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                    source: e,
+                    path: path_ref.to_path_buf(),
+                })?;
+                let decoder = GzDecoder::new(file);
+                let reader = fasta::Reader::new(BufReader::new(decoder));
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+            (SequenceFormat::Fasta | SequenceFormat::Auto, false) => {
+                let reader =
+                    fasta::Reader::from_file(path_ref).map_err(|e| KmeRustError::SequenceRead {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+                        path: path_ref.to_path_buf(),
+                    })?;
+                reader
+                    .records()
+                    .map(|r| {
+                        r.map(|rec| Bytes::copy_from_slice(rec.seq())).map_err(|e| {
+                            KmeRustError::SequenceParse {
+                                details: e.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
         };
 
         #[cfg(feature = "tracing")]
         {
             drop(_read_span);
-            debug!(sequences = records.len(), "Read sequences from file");
+            debug!(sequences = sequences.len(), "Read sequences from file");
         }
 
         #[cfg(feature = "tracing")]
-        let _process_span = info_span!("process_sequences", count = records.len()).entered();
+        let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
-        records.par_iter().for_each(|record| {
-            let seq = Bytes::copy_from_slice(record.seq());
-            self.process_sequence(&seq, k);
+        sequences.par_iter().for_each(|seq| {
+            self.process_sequence(seq, k);
         });
 
         Ok(self.counts.into_iter().collect())
