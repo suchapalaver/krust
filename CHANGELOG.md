@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-27
+
+### Added
+
+#### FASTQ Support
+
+- Full FASTQ file format support with automatic detection from file extension (`.fq`, `.fastq`, `.fq.gz`, `.fastq.gz`)
+- `--input-format` / `-i` CLI flag for explicit format specification (required for stdin FASTQ)
+- `SequenceFormat` enum (`Auto`, `Fasta`, `Fastq`) for programmatic format selection
+- FASTQ support in streaming APIs (`count_kmers_streaming`, `count_kmers_sequential`)
+- Gzip-compressed FASTQ support (`.fq.gz`)
+
+#### Quality-Based Filtering
+
+- `--min-quality` / `-Q` CLI flag to filter k-mers by base quality scores (Phred 0-93)
+- K-mers containing bases below the quality threshold are skipped
+- Smart skip optimization: jumps past low-quality bases rather than checking overlapping windows
+- `count_kmers_with_quality` function for programmatic quality filtering
+- Appropriate warnings when quality filtering is used with FASTA or stdin
+
+#### Histogram Output
+
+- `--format histogram` output mode for k-mer frequency spectrum (count of counts)
+- Tab-separated output: `count<TAB>frequency`, sorted by count ascending
+- `KmerHistogram` type alias (`BTreeMap<u64, u64>`) for histogram data
+- `compute_histogram` and `compute_histogram_packed` functions
+- `histogram_stats` function returning `HistogramStats` (total, distinct, mode, mean)
+- `KmerCounter::histogram()` builder method
+
+#### K-mer Index Serialization
+
+- `--save <PATH>` flag to save k-mer counts to binary index file (`.kmix`)
+- `kmerust query <INDEX> <KMER>` subcommand to look up k-mer counts from saved index
+- Compact binary format with versioned header and CRC32 integrity checking
+- Automatic gzip compression when saving to `.kmix.gz`
+- `KmerIndex` struct with `save_index` and `load_index` functions
+- Query support: case-insensitive, canonicalized lookups
+
+### Changed
+
+- Package description updated to mention FASTQ support
+- Error types renamed for format neutrality: `FastaRead` → `SequenceRead`, `FastaParse` → `SequenceParse`
+- Consolidated duplicate output code in main.rs for better error handling
+- `output_counts` function is now public in the `run` module
+
+### Fixed
+
+- Quality filtering correctly warns when used with stdin (not yet supported there)
+- Quality filtering correctly warns when used with FASTA input (no quality data available)
+
 ## [0.2.1] - 2026-01-23
 
 ### Added
@@ -104,7 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - K-mer lengths from 1 to 32
 - Jellyfish-compatible output format
 
-[Unreleased]: https://github.com/suchapalaver/kmerust/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/suchapalaver/kmerust/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/suchapalaver/kmerust/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/suchapalaver/kmerust/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/suchapalaver/kmerust/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/suchapalaver/kmerust/releases/tag/v0.1.0
