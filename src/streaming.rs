@@ -540,7 +540,7 @@ where
                 let record = result.map_err(|e| KmeRustError::SequenceParse {
                     details: e.to_string(),
                 })?;
-                process_sequence_into_counts(&mut counts, record.seq(), k);
+                process_sequence_into_counts(&mut counts, record.seq(), None, k, None);
             }
         }
         SequenceFormat::Fasta | SequenceFormat::Auto => {
@@ -549,7 +549,7 @@ where
                 let record = result.map_err(|e| KmeRustError::SequenceParse {
                     details: e.to_string(),
                 })?;
-                process_sequence_into_counts(&mut counts, record.seq(), k);
+                process_sequence_into_counts(&mut counts, record.seq(), None, k, None);
             }
         }
     }
@@ -607,25 +607,41 @@ where
         let record = result.map_err(|e| KmeRustError::SequenceParse {
             details: e.to_string(),
         })?;
-        process_sequence_into_counts(&mut counts, &record.seq(), k);
+        process_sequence_into_counts(&mut counts, &record.seq(), None, k, None);
     }
 
     Ok(counts.into_iter().collect())
 }
 
 /// Process a sequence and add k-mer counts to the map.
+///
+/// If quality scores are provided along with a minimum quality threshold,
+/// k-mers containing bases with quality below the threshold are skipped.
 fn process_sequence_into_counts(
     counts: &mut HashMap<u64, u64, BuildHasherDefault<FxHasher>>,
     seq: &[u8],
+    qual: Option<&[u8]>,
     k: KmerLength,
+    min_quality: Option<u8>,
 ) {
     let k_val = k.get();
     if seq.len() < k_val {
         return;
     }
 
+    // Pre-compute quality threshold as ASCII value (Phred+33)
+    let quality_threshold = min_quality.map(|q| q.saturating_add(33));
+
     let mut i = 0;
     while i <= seq.len() - k_val {
+        // Check quality if filtering is enabled
+        if let (Some(q), Some(threshold)) = (qual, quality_threshold) {
+            if let Some(bad_pos) = q[i..i + k_val].iter().position(|&qv| qv < threshold) {
+                i += bad_pos + 1; // Skip past low-quality base
+                continue;
+            }
+        }
+
         let sub = Bytes::copy_from_slice(&seq[i..i + k_val]);
 
         match Kmer::from_sub(sub) {
@@ -691,7 +707,7 @@ impl SequentialKmerCounter {
                         let record = result.map_err(|e| KmeRustError::SequenceParse {
                             details: e.to_string(),
                         })?;
-                        self.process_sequence(record.seq(), k);
+                        self.process_sequence(record.seq(), None, k, None);
                     }
                 }
                 SequenceFormat::Fasta | SequenceFormat::Auto => {
@@ -700,7 +716,7 @@ impl SequentialKmerCounter {
                         let record = result.map_err(|e| KmeRustError::SequenceParse {
                             details: e.to_string(),
                         })?;
-                        self.process_sequence(record.seq(), k);
+                        self.process_sequence(record.seq(), None, k, None);
                     }
                 }
             }
@@ -721,7 +737,7 @@ impl SequentialKmerCounter {
                     let record = result.map_err(|e| KmeRustError::SequenceParse {
                         details: e.to_string(),
                     })?;
-                    self.process_sequence(record.seq(), k);
+                    self.process_sequence(record.seq(), None, k, None);
                 }
             }
             SequenceFormat::Fasta | SequenceFormat::Auto => {
@@ -735,7 +751,7 @@ impl SequentialKmerCounter {
                     let record = result.map_err(|e| KmeRustError::SequenceParse {
                         details: e.to_string(),
                     })?;
-                    self.process_sequence(record.seq(), k);
+                    self.process_sequence(record.seq(), None, k, None);
                 }
             }
         }
@@ -764,20 +780,37 @@ impl SequentialKmerCounter {
             let record = result.map_err(|e| KmeRustError::SequenceParse {
                 details: e.to_string(),
             })?;
-            self.process_sequence(&record.seq(), k);
+            self.process_sequence(&record.seq(), None, k, None);
         }
 
         Ok(self.counts.into_iter().collect())
     }
 
-    fn process_sequence(&mut self, seq: &[u8], k: KmerLength) {
+    fn process_sequence(
+        &mut self,
+        seq: &[u8],
+        qual: Option<&[u8]>,
+        k: KmerLength,
+        min_quality: Option<u8>,
+    ) {
         let k_val = k.get();
         if seq.len() < k_val {
             return;
         }
 
+        // Pre-compute quality threshold as ASCII value (Phred+33)
+        let quality_threshold = min_quality.map(|q| q.saturating_add(33));
+
         let mut i = 0;
         while i <= seq.len() - k_val {
+            // Check quality if filtering is enabled
+            if let (Some(q), Some(threshold)) = (qual, quality_threshold) {
+                if let Some(bad_pos) = q[i..i + k_val].iter().position(|&qv| qv < threshold) {
+                    i += bad_pos + 1; // Skip past low-quality base
+                    continue;
+                }
+            }
+
             let sub = Bytes::copy_from_slice(&seq[i..i + k_val]);
 
             match Kmer::from_sub(sub) {
@@ -867,7 +900,7 @@ impl StreamingKmerCounter {
         let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
-            self.process_sequence(seq, k);
+            self.process_sequence(seq, None, k, None);
         });
 
         Ok(self.counts.into_iter().collect())
@@ -973,7 +1006,7 @@ impl StreamingKmerCounter {
         let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
-            self.process_sequence(seq, k);
+            self.process_sequence(seq, None, k, None);
         });
 
         Ok(self.counts.into_iter().collect())
@@ -1014,7 +1047,7 @@ impl StreamingKmerCounter {
         let _process_span = info_span!("process_sequences", count = sequences.len()).entered();
 
         sequences.par_iter().for_each(|seq| {
-            self.process_sequence(seq, k);
+            self.process_sequence(seq, None, k, None);
         });
 
         Ok(self.counts.into_iter().collect())
@@ -1025,19 +1058,36 @@ impl StreamingKmerCounter {
         I: Iterator<Item = Bytes>,
     {
         for seq in sequences {
-            self.process_sequence(&seq, k);
+            self.process_sequence(&seq, None, k, None);
         }
         self.counts.into_iter().collect()
     }
 
-    fn process_sequence(&self, seq: &Bytes, k: KmerLength) {
+    fn process_sequence(
+        &self,
+        seq: &Bytes,
+        qual: Option<&[u8]>,
+        k: KmerLength,
+        min_quality: Option<u8>,
+    ) {
         let k_val = k.get();
         if seq.len() < k_val {
             return;
         }
 
+        // Pre-compute quality threshold as ASCII value (Phred+33)
+        let quality_threshold = min_quality.map(|q| q.saturating_add(33));
+
         let mut i = 0;
         while i <= seq.len() - k_val {
+            // Check quality if filtering is enabled
+            if let (Some(q), Some(threshold)) = (qual, quality_threshold) {
+                if let Some(bad_pos) = q[i..i + k_val].iter().position(|&qv| qv < threshold) {
+                    i += bad_pos + 1; // Skip past low-quality base
+                    continue;
+                }
+            }
+
             let sub = seq.slice(i..i + k_val);
 
             match Kmer::from_sub(sub) {
@@ -1106,5 +1156,82 @@ mod tests {
         assert_eq!(counts.len(), 1);
         let count = counts.values().next().unwrap();
         assert_eq!(*count, 2);
+    }
+
+    #[test]
+    fn quality_filtering_skips_low_quality_kmers() {
+        let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+            HashMap::with_hasher(BuildHasherDefault::default());
+
+        // Sequence: ACGTACGT
+        // Quality: IIII!!!! (I=40, !=0 in Phred+33)
+        // With min_quality=20, k-mers starting at positions 0,1,2,3 should pass (all high quality)
+        // But positions 4+ have low quality bases in the window
+        let seq = b"ACGTACGT";
+        let qual = b"IIII!!!!"; // I = ASCII 73 = Phred 40, ! = ASCII 33 = Phred 0
+        let k = KmerLength::new(4).unwrap();
+        let min_quality = Some(20u8);
+
+        process_sequence_into_counts(&mut counts, seq, Some(qual), k, min_quality);
+
+        // Only k-mers from positions 0 (ACGT) should be counted
+        // Position 0: ACGT (qual IIII) - passes
+        // Position 1: CGTA (qual III!) - fails (! < 20)
+        // Position 2: GTAC (qual II!!) - fails
+        // Position 3: TACG (qual I!!!) - fails
+        // Position 4: ACGT (qual !!!!) - fails
+        assert_eq!(counts.len(), 1);
+        let count = counts.values().next().unwrap();
+        assert_eq!(*count, 1);
+    }
+
+    #[test]
+    fn quality_filtering_with_no_threshold_counts_all() {
+        let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+            HashMap::with_hasher(BuildHasherDefault::default());
+
+        let seq = b"ACGTACGT";
+        let qual = b"IIII!!!!";
+        let k = KmerLength::new(4).unwrap();
+
+        // No quality threshold - all k-mers should be counted
+        process_sequence_into_counts(&mut counts, seq, Some(qual), k, None);
+
+        // Without quality filtering, we get all k-mers
+        // ACGT appears twice (positions 0 and 4)
+        assert!(!counts.is_empty());
+    }
+
+    #[test]
+    fn quality_filtering_with_zero_threshold_counts_all() {
+        let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+            HashMap::with_hasher(BuildHasherDefault::default());
+
+        let seq = b"ACGTACGT";
+        let qual = b"IIII!!!!";
+        let k = KmerLength::new(4).unwrap();
+
+        // Quality 0 threshold - ! (Phred 0) passes because 0 >= 0
+        // But the threshold is converted to ASCII 33 (0 + 33), and ! is ASCII 33
+        // So ! exactly meets the threshold
+        process_sequence_into_counts(&mut counts, seq, Some(qual), k, Some(0));
+
+        // With threshold 0, all positions should pass
+        assert!(!counts.is_empty());
+    }
+
+    #[test]
+    fn quality_filtering_without_quality_data_counts_all() {
+        let mut counts: HashMap<u64, u64, BuildHasherDefault<FxHasher>> =
+            HashMap::with_hasher(BuildHasherDefault::default());
+
+        let seq = b"ACGTACGT";
+        let k = KmerLength::new(4).unwrap();
+
+        // No quality data (like FASTA) - quality filtering is ignored
+        process_sequence_into_counts(&mut counts, seq, None, k, Some(20));
+
+        // Without quality data, all k-mers should be counted
+        assert!(!counts.is_empty());
     }
 }

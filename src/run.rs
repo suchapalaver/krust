@@ -9,7 +9,7 @@ use crate::{
     input::Input,
     kmer::{unpack_to_string, Kmer, KmerLength},
     progress::{Progress, ProgressTracker},
-    reader::read,
+    reader::{read, read_with_quality, SequenceWithQuality},
     streaming::count_kmers_stdin_with_format,
 };
 use bytes::Bytes;
@@ -165,6 +165,40 @@ pub fn run_with_input_format(
     output_counts(counts, output_format, min_count)
 }
 
+/// Counts k-mers from an input source with quality filtering and writes to stdout.
+///
+/// For FASTQ input, k-mers containing bases with quality below `min_quality`
+/// are skipped. For FASTA input, the quality parameter is ignored.
+///
+/// # Arguments
+///
+/// * `input` - The input source (file path or stdin)
+/// * `k` - K-mer length
+/// * `output_format` - Output format (fasta, tsv, or json)
+/// * `min_count` - Minimum count threshold
+/// * `input_format` - Input file format
+/// * `min_quality` - Optional minimum Phred quality score (0-93)
+///
+/// # Errors
+///
+/// Returns `ProcessError` on read, write, or serialization errors.
+pub fn run_with_quality(
+    input: &Input,
+    k: usize,
+    output_format: OutputFormat,
+    min_count: u64,
+    input_format: SequenceFormat,
+    min_quality: Option<u8>,
+) -> Result<(), ProcessError> {
+    let counts = match input {
+        Input::File(path) => count_kmers_with_quality(path, k, input_format, min_quality)?,
+        // For stdin, quality filtering is not yet supported
+        Input::Stdin => count_kmers_stdin_with_format(k, input_format)
+            .map_err(|e| ProcessError::ReadError(e.into()))?,
+    };
+    output_counts(counts, output_format, min_count)
+}
+
 /// Counts k-mers and returns them as a HashMap.
 ///
 /// This is the main library API for counting k-mers without writing to stdout.
@@ -242,6 +276,69 @@ where
 
     #[cfg(feature = "tracing")]
     info!(unique_kmers = result.len(), "K-mer counting complete");
+
+    Ok(result)
+}
+
+/// Counts k-mers with quality filtering.
+///
+/// For FASTQ input, k-mers containing bases with quality below `min_quality`
+/// are skipped. For FASTA input, the quality parameter is ignored.
+///
+/// # Arguments
+///
+/// * `path` - Path to the FASTA or FASTQ file
+/// * `k` - K-mer length (must be 1-32)
+/// * `format` - Input file format (Auto, Fasta, or Fastq)
+/// * `min_quality` - Optional minimum Phred quality score (0-93)
+///
+/// # Returns
+///
+/// A HashMap mapping k-mer strings to their counts.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `k` is outside the valid range (1-32)
+/// - The file cannot be read
+pub fn count_kmers_with_quality<P>(
+    path: P,
+    k: usize,
+    format: SequenceFormat,
+    min_quality: Option<u8>,
+) -> Result<HashMap<String, u64>, Box<dyn Error>>
+where
+    P: AsRef<Path> + Debug,
+{
+    #[cfg(feature = "tracing")]
+    info!(k = k, path = ?path, min_quality = ?min_quality, "Starting k-mer counting with quality filter");
+
+    // Validate k-mer length upfront to provide a clear error
+    let k_len = KmerLength::new(k)?;
+
+    #[cfg(feature = "tracing")]
+    let _read_span = info_span!("read_sequences", path = ?path).entered();
+
+    let sequences = read_with_quality(&path, format)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_read_span);
+
+    #[cfg(feature = "tracing")]
+    let _process_span = info_span!("process_sequences").entered();
+
+    let kmer_map = KmerMap::new().build_with_quality(sequences, k, min_quality)?;
+
+    #[cfg(feature = "tracing")]
+    drop(_process_span);
+
+    let result = kmer_map.into_hashmap(k_len);
+
+    #[cfg(feature = "tracing")]
+    info!(
+        unique_kmers = result.len(),
+        "K-mer counting with quality complete"
+    );
 
     Ok(result)
 }
@@ -396,13 +493,51 @@ impl KmerMap {
         Ok(self)
     }
 
+    fn build_with_quality(
+        self,
+        sequences: rayon::vec::IntoIter<SequenceWithQuality>,
+        k: usize,
+        min_quality: Option<u8>,
+    ) -> Result<Self, Box<dyn Error>> {
+        sequences.for_each(|seq_qual| {
+            self.process_sequence_with_quality(
+                &seq_qual.seq,
+                seq_qual.qual.as_deref(),
+                k,
+                min_quality,
+            );
+        });
+        Ok(self)
+    }
+
     fn process_sequence(&self, seq: &Bytes, k: usize) {
+        self.process_sequence_with_quality(seq, None, k, None);
+    }
+
+    fn process_sequence_with_quality(
+        &self,
+        seq: &Bytes,
+        qual: Option<&[u8]>,
+        k: usize,
+        min_quality: Option<u8>,
+    ) {
         if seq.len() < k {
             return;
         }
-        let mut i = 0;
 
+        // Pre-compute quality threshold as ASCII value (Phred+33)
+        let quality_threshold = min_quality.map(|q| q.saturating_add(33));
+
+        let mut i = 0;
         while i <= seq.len() - k {
+            // Check quality if filtering is enabled
+            if let (Some(q), Some(threshold)) = (qual, quality_threshold) {
+                if let Some(bad_pos) = q[i..i + k].iter().position(|&qv| qv < threshold) {
+                    i += bad_pos + 1; // Skip past low-quality base
+                    continue;
+                }
+            }
+
             let sub = seq.slice(i..i + k);
 
             match Kmer::from_sub(sub) {

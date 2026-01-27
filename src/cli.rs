@@ -61,6 +61,12 @@ pub struct Args {
     /// Save k-mer counts to index file for later querying
     #[arg(long)]
     pub save: Option<PathBuf>,
+
+    /// Minimum base quality score (Phred, 0-93) for FASTQ filtering.
+    /// K-mers containing bases below this threshold are skipped.
+    /// Ignored for FASTA input.
+    #[arg(short = 'Q', long = "min-quality")]
+    pub min_quality: Option<u8>,
 }
 
 impl Args {

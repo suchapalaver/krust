@@ -108,6 +108,13 @@ fn run_count(args: Args) {
                 args.min_count.to_string().blue().bold()
             );
         }
+        if let Some(min_q) = args.min_quality {
+            eprintln!(
+                "{}: {}",
+                "min-quality".bold(),
+                min_q.to_string().blue().bold()
+            );
+        }
         if let Some(ref save_path) = args.save {
             eprintln!(
                 "{}: {}",
@@ -118,19 +125,30 @@ fn run_count(args: Args) {
         eprintln!();
     }
 
+    // Warn if min-quality is set but input is FASTA (quality scores not available)
+    if args.min_quality.is_some() && input_format.is_fasta() {
+        eprintln!(
+            "{}: {}",
+            "warning".yellow().bold(),
+            "--min-quality is ignored for FASTA input".yellow()
+        );
+    }
+
     // If saving to index, we need to capture the packed counts
     if let Some(ref save_path) = args.save {
         // Count k-mers and get packed representation for the index
         let counts = match &input {
-            Input::File(path) => run::count_kmers_with_format(path, args.k, input_format)
-                .unwrap_or_else(|e| {
-                    eprintln!(
-                        "{}\n {}",
-                        "Application error:".blue().bold(),
-                        e.to_string().blue()
-                    );
-                    process::exit(1);
-                }),
+            Input::File(path) => {
+                run::count_kmers_with_quality(path, args.k, input_format, args.min_quality)
+                    .unwrap_or_else(|e| {
+                        eprintln!(
+                            "{}\n {}",
+                            "Application error:".blue().bold(),
+                            e.to_string().blue()
+                        );
+                        process::exit(1);
+                    })
+            }
             Input::Stdin => kmerust::streaming::count_kmers_stdin_with_format(args.k, input_format)
                 .unwrap_or_else(|e| {
                     eprintln!(
@@ -170,9 +188,14 @@ fn run_count(args: Args) {
         output_counts(&counts, args.format, args.min_count);
     } else {
         // Normal operation: count and output
-        if let Err(e) =
-            run::run_with_input_format(&input, args.k, args.format, args.min_count, input_format)
-        {
+        if let Err(e) = run::run_with_quality(
+            &input,
+            args.k,
+            args.format,
+            args.min_count,
+            input_format,
+            args.min_quality,
+        ) {
             eprintln!(
                 "{}\n {}",
                 "Application error:".blue().bold(),
