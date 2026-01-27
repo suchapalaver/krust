@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-01-27
+
 ### Internal
 
+- Enabled pedantic, nursery, and all clippy lint groups in `Cargo.toml` for comprehensive static analysis
 - Added property tests for index serialization roundtrip and canonical k-mer deduplication
+- Made numerous functions `const` where applicable
+- Improved code quality with explicit safety annotations on intentional `unsafe` blocks
 
 ## [0.3.0] - 2026-01-27
 
@@ -160,7 +165,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - K-mer lengths from 1 to 32
 - Jellyfish-compatible output format
 
-[Unreleased]: https://github.com/suchapalaver/kmerust/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/suchapalaver/kmerust/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/suchapalaver/kmerust/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/suchapalaver/kmerust/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/suchapalaver/kmerust/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/suchapalaver/kmerust/compare/v0.1.0...v0.2.0
