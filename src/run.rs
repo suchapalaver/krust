@@ -425,7 +425,19 @@ where
     Ok(result)
 }
 
-fn output_counts(
+/// Writes k-mer counts to stdout in the specified format.
+///
+/// # Arguments
+///
+/// * `counts` - HashMap of k-mer strings to their counts
+/// * `format` - Output format (Fasta, Tsv, Json, or Histogram)
+/// * `min_count` - Minimum count threshold (k-mers below this are excluded)
+///
+/// # Errors
+///
+/// Returns `ProcessError::WriteError` if output cannot be written.
+/// Returns `ProcessError::JsonError` if JSON serialization fails.
+pub fn output_counts(
     counts: HashMap<String, u64>,
     format: OutputFormat,
     min_count: u64,

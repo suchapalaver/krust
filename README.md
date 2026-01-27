@@ -46,9 +46,11 @@ kmerust <k> <path>
 
 ### Options
 
-- `-f, --format <FORMAT>` - Output format: `fasta` (default), `tsv`, or `json`
+- `-f, --format <FORMAT>` - Output format: `fasta` (default), `tsv`, `json`, or `histogram`
 - `-i, --input-format <FORMAT>` - Input format: `auto` (default), `fasta`, or `fastq`
 - `-m, --min-count <N>` - Minimum count threshold (default: 1)
+- `-Q, --min-quality <N>` - Minimum Phred quality score for FASTQ (0-93); bases below this are skipped
+- `--save <PATH>` - Save k-mer counts to a binary index file for fast querying
 - `-q, --quiet` - Suppress informational output
 - `-h, --help` - Print help information
 - `-V, --version` - Print version information
@@ -108,7 +110,76 @@ kmerust 21 sequences.fa --format json
 
 # FASTA-like format (default)
 kmerust 21 sequences.fa --format fasta
+
+# Histogram format (k-mer frequency spectrum)
+kmerust 21 sequences.fa --format histogram
 ```
+
+### Histogram Output
+
+The histogram format outputs the k-mer frequency spectrum (count of counts), useful for genome size estimation and error detection:
+
+```bash
+kmerust 21 genome.fa --format histogram > spectrum.tsv
+```
+
+Output is tab-separated with columns `count` and `frequency`:
+
+```
+1       1523456    # 1.5M k-mers appear exactly once (likely errors)
+2       234567     # 234K k-mers appear twice
+10      45678      # 45K k-mers appear 10 times
+...
+```
+
+### Quality Filtering (FASTQ)
+
+For FASTQ files, use `--min-quality` to filter out k-mers containing low-quality bases:
+
+```bash
+# Skip k-mers with any base below Q20
+kmerust 21 reads.fq --min-quality 20
+
+# Higher threshold for stricter filtering
+kmerust 21 reads.fq -Q 30 --format tsv
+```
+
+K-mers containing bases with Phred quality scores below the threshold are skipped entirely.
+
+### Index Serialization
+
+For large genomes, save k-mer counts to a binary index file to avoid re-counting:
+
+```bash
+# Count and save to index
+kmerust 21 genome.fa --save counts.kmix
+
+# Counts are also written to stdout as usual
+kmerust 21 genome.fa --save counts.kmix > counts.tsv
+```
+
+The index file uses a compact binary format with CRC32 checksums for integrity verification. Gzip compression is auto-detected from the `.gz` extension:
+
+```bash
+# Save with gzip compression
+kmerust 21 genome.fa --save counts.kmix.gz
+```
+
+### Querying a Saved Index
+
+Use the `query` subcommand to look up k-mer counts from a saved index:
+
+```bash
+# Query a single k-mer
+kmerust query counts.kmix ACGTACGTACGTACGTACGTA
+# Output: 42 (or 0 if not found)
+
+# Queries are case-insensitive and canonicalized
+kmerust query counts.kmix acgtacgtacgtacgtacgta  # Same result
+kmerust query counts.kmix TGTACGTACGTACGTACGTAC  # Reverse complement, same result
+```
+
+The query k-mer length must match the index's k value.
 
 ### Sequence Readers
 

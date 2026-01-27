@@ -8,7 +8,7 @@ use kmerust::{
     index::{load_index, save_index, KmerIndex},
     input::Input,
     kmer::{Kmer, KmerLength},
-    run,
+    run::{self, output_counts},
 };
 
 /// Initialize the tracing subscriber with environment filter.
@@ -134,6 +134,15 @@ fn run_count(args: Args) {
         );
     }
 
+    // Warn if min-quality is set with stdin (not yet supported for stdin)
+    if args.min_quality.is_some() && matches!(input, Input::Stdin) {
+        eprintln!(
+            "{}: {}",
+            "warning".yellow().bold(),
+            "--min-quality is not yet supported for stdin input".yellow()
+        );
+    }
+
     // If saving to index, we need to capture the packed counts
     if let Some(ref save_path) = args.save {
         // Count k-mers and get packed representation for the index
@@ -185,7 +194,14 @@ fn run_count(args: Args) {
         }
 
         // Also output to stdout as usual
-        output_counts(&counts, args.format, args.min_count);
+        if let Err(e) = output_counts(counts, args.format, args.min_count) {
+            eprintln!(
+                "{}\n {}",
+                "Application error:".blue().bold(),
+                e.to_string().blue()
+            );
+            process::exit(1);
+        }
     } else {
         // Normal operation: count and output
         if let Err(e) = run::run_with_quality(
@@ -272,60 +288,4 @@ fn counts_to_packed(
             (packed, count)
         })
         .collect()
-}
-
-/// Output counts to stdout (mirrors run::output_counts but we need it here too)
-fn output_counts(
-    counts: &std::collections::HashMap<String, u64>,
-    format: kmerust::cli::OutputFormat,
-    min_count: u64,
-) {
-    use kmerust::cli::OutputFormat;
-    use std::io::{stdout, BufWriter, Write};
-
-    let mut buf = BufWriter::new(stdout());
-    let filtered: Vec<_> = counts
-        .iter()
-        .filter(|(_, &count)| count >= min_count)
-        .collect();
-
-    match format {
-        OutputFormat::Fasta => {
-            for (kmer, count) in filtered {
-                writeln!(buf, ">{count}\n{kmer}").unwrap();
-            }
-        }
-        OutputFormat::Tsv => {
-            for (kmer, count) in filtered {
-                writeln!(buf, "{kmer}\t{count}").unwrap();
-            }
-        }
-        OutputFormat::Json => {
-            use serde::Serialize;
-            #[derive(Serialize)]
-            struct KmerCount<'a> {
-                kmer: &'a str,
-                count: u64,
-            }
-            let json_data: Vec<KmerCount> = filtered
-                .into_iter()
-                .map(|(kmer, &count)| KmerCount { kmer, count })
-                .collect();
-            serde_json::to_writer_pretty(&mut buf, &json_data).unwrap();
-            writeln!(buf).unwrap();
-        }
-        OutputFormat::Histogram => {
-            use kmerust::histogram::compute_histogram;
-
-            let counts_map: std::collections::HashMap<String, u64> =
-                filtered.into_iter().map(|(k, &v)| (k.clone(), v)).collect();
-            let histogram = compute_histogram(&counts_map);
-
-            for (count, frequency) in histogram {
-                writeln!(buf, "{count}\t{frequency}").unwrap();
-            }
-        }
-    }
-
-    buf.flush().unwrap();
 }
