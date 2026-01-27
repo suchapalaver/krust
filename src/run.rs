@@ -358,6 +358,17 @@ fn output_counts(
             serde_json::to_writer_pretty(&mut buf, &json_data)?;
             writeln!(buf)?;
         }
+        OutputFormat::Histogram => {
+            use crate::histogram::compute_histogram;
+
+            // Build a HashMap for compute_histogram
+            let counts_map: HashMap<String, u64> = filtered.into_iter().collect();
+            let histogram = compute_histogram(&counts_map);
+
+            for (count, frequency) in histogram {
+                writeln!(buf, "{count}\t{frequency}")?;
+            }
+        }
     }
 
     buf.flush()?;

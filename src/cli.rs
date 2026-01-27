@@ -86,6 +86,8 @@ pub enum OutputFormat {
     Tsv,
     /// JSON array format
     Json,
+    /// Histogram format (count\tfrequency) - count of counts
+    Histogram,
 }
 
 fn parse_k(s: &str) -> Result<usize, String> {

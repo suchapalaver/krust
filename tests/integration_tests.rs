@@ -596,3 +596,196 @@ fn parse_tsv_counts(output: &[u8]) -> std::collections::HashMap<String, u64> {
         })
         .collect()
 }
+
+// Histogram Output Tests
+
+#[test]
+fn cli_format_histogram() {
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "histogram",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Histogram format should have tab-separated count and frequency
+    assert!(stdout.contains('\t'));
+    // Should not have FASTA-like format
+    assert!(!stdout.contains('>'));
+    // Should not have k-mer strings
+    assert!(!stdout.contains("ACG") && !stdout.contains("CGT"));
+}
+
+#[test]
+fn cli_histogram_tsv_format() {
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "histogram",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Each line should be count\tfrequency (two numbers separated by tab)
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        assert_eq!(parts.len(), 2, "Histogram line should have two columns");
+        assert!(
+            parts[0].parse::<u64>().is_ok(),
+            "First column should be count"
+        );
+        assert!(
+            parts[1].parse::<u64>().is_ok(),
+            "Second column should be frequency"
+        );
+    }
+}
+
+#[test]
+fn cli_histogram_sums_correctly() {
+    // Count k-mers normally
+    let tsv_output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "tsv",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(tsv_output.status.success());
+
+    // Count histogram
+    let hist_output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "histogram",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(hist_output.status.success());
+
+    // Number of unique k-mers should equal sum of histogram frequencies
+    let tsv_lines = String::from_utf8_lossy(&tsv_output.stdout).lines().count();
+
+    let hist_freq_sum: u64 = String::from_utf8_lossy(&hist_output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            parts.get(1)?.parse::<u64>().ok()
+        })
+        .sum();
+
+    assert_eq!(
+        tsv_lines as u64, hist_freq_sum,
+        "Sum of histogram frequencies should equal number of unique k-mers"
+    );
+}
+
+#[test]
+fn cli_histogram_with_min_count() {
+    // Histogram with min-count filter
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "histogram",
+            "--min-count",
+            "2",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // All counts in histogram should be >= 2
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if let Ok(count) = parts[0].parse::<u64>() {
+            assert!(count >= 2, "Histogram counts should be >= min_count");
+        }
+    }
+}
+
+#[test]
+fn cli_histogram_sorted_by_count() {
+    let output = kmerust_cmd()
+        .args([
+            "3",
+            "tests/fixtures/simple.fa",
+            "--format",
+            "histogram",
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let counts: Vec<u64> = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            parts.first()?.parse::<u64>().ok()
+        })
+        .collect();
+
+    // BTreeMap should produce sorted output
+    let mut sorted_counts = counts.clone();
+    sorted_counts.sort();
+    assert_eq!(
+        counts, sorted_counts,
+        "Histogram output should be sorted by count"
+    );
+}
+
+#[test]
+fn cli_histogram_stdin() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fasta_content = b">seq1\nAAAAAAAA\n";
+
+    let mut child = kmerust_cmd()
+        .args(["3", "-", "--format", "histogram", "--quiet"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(fasta_content)
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("Failed to wait");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // "AAAAAAAA" has 6 "AAA" k-mers, all the same (canonical)
+    // So histogram should show count 6 with frequency 1
+    assert!(
+        stdout.contains("6\t1"),
+        "Should have one k-mer with count 6"
+    );
+}

@@ -258,6 +258,41 @@ impl KmerCounter {
         }
     }
 
+    /// Computes a k-mer frequency histogram from the specified sequence file.
+    ///
+    /// Returns a histogram mapping count values to the number of k-mers with
+    /// that count. This is useful for genome size estimation, error detection,
+    /// and heterozygosity analysis.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BuilderError::KmerLengthNotSet`] if `k` has not been set,
+    /// or [`BuilderError::Kmerust`] if the file cannot be read or parsed.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use kmerust::builder::KmerCounter;
+    ///
+    /// let histogram = KmerCounter::new()
+    ///     .k(21)?
+    ///     .histogram("genome.fa")?;
+    ///
+    /// for (count, frequency) in histogram {
+    ///     println!("{count} k-mers appear {frequency} times");
+    /// }
+    /// # Ok::<(), kmerust::error::BuilderError>(())
+    /// ```
+    pub fn histogram<P>(&self, path: P) -> Result<crate::histogram::KmerHistogram, BuilderError>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        use crate::histogram::compute_histogram;
+
+        let counts = self.count(&path)?;
+        Ok(compute_histogram(&counts))
+    }
+
     /// Counts k-mers with progress reporting.
     ///
     /// Similar to [`count()`](Self::count), but invokes a callback after
@@ -391,6 +426,14 @@ impl KmerCounter {
                     .collect();
                 serde_json::to_writer_pretty(&mut writer, &json_data)?;
                 writeln!(writer)?;
+            }
+            OutputFormat::Histogram => {
+                use crate::histogram::compute_histogram;
+
+                let histogram = compute_histogram(&counts);
+                for (count, frequency) in histogram {
+                    writeln!(writer, "{count}\t{frequency}")?;
+                }
             }
         }
 
