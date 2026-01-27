@@ -60,6 +60,26 @@ pub enum KmeRustError {
         source: std::io::Error,
         path: PathBuf,
     },
+
+    /// Failed to read index file.
+    #[error("failed to read index file '{path}': {source}")]
+    IndexRead {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    /// Failed to write index file.
+    #[error("failed to write index file '{path}': {source}")]
+    IndexWrite {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    /// Invalid or corrupted index file.
+    #[error("invalid index file '{path}': {details}")]
+    InvalidIndex { details: String, path: PathBuf },
 }
 
 /// Error for invalid k-mer length.

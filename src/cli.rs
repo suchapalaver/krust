@@ -1,6 +1,6 @@
 //! Command-line interface definition.
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 use crate::format::SequenceFormat;
@@ -57,6 +57,10 @@ pub struct Args {
     /// Input file format (auto-detected from extension if not specified)
     #[arg(short = 'i', long = "input-format", value_enum, default_value = "auto")]
     pub input_format: SequenceFormat,
+
+    /// Save k-mer counts to index file for later querying
+    #[arg(long)]
+    pub save: Option<PathBuf>,
 }
 
 impl Args {
@@ -101,4 +105,34 @@ fn parse_k(s: &str) -> Result<usize, String> {
         return Err("k-mer length must be at most 32".to_string());
     }
     Ok(k)
+}
+
+/// Top-level CLI structure supporting both counting and querying.
+#[derive(Parser, Debug)]
+#[command(name = "kmerust")]
+#[command(
+    version,
+    author,
+    about = "A fast, parallel k-mer counter for DNA sequences"
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+/// Available subcommands.
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Query k-mer counts from a pre-built index
+    Query(QueryArgs),
+}
+
+/// Arguments for the query command.
+#[derive(Parser, Debug)]
+pub struct QueryArgs {
+    /// Path to the k-mer index file (.kmix)
+    pub index: PathBuf,
+
+    /// K-mer sequence to query (e.g., ACGTACGT)
+    pub kmer: String,
 }

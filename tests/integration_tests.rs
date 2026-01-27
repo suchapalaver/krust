@@ -789,3 +789,287 @@ fn cli_histogram_stdin() {
         "Should have one k-mer with count 6"
     );
 }
+
+// ============================================================================
+// Index Serialization Tests (--save flag and query command)
+// ============================================================================
+
+#[test]
+fn cli_save_flag_creates_index() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    let output = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(output.status.success(), "Command should succeed");
+    assert!(tmp.path().exists(), "Index file should be created");
+
+    // Verify the file is a valid index by checking magic bytes
+    let data = std::fs::read(tmp.path()).unwrap();
+    assert!(data.len() >= 18, "Index file should be at least 18 bytes");
+    assert_eq!(&data[0..4], b"KMIX", "Index should have KMIX magic bytes");
+}
+
+#[test]
+fn cli_save_flag_outputs_counts_and_saves() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    let output = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+            "--format",
+            "tsv",
+        ])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(output.status.success());
+    assert!(tmp.path().exists());
+
+    // Verify stdout has k-mer counts
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains('\t'), "TSV output should contain tabs");
+    assert!(!stdout.is_empty(), "Should have output k-mers");
+}
+
+#[test]
+fn cli_query_basic() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // First create an index from simple.fa
+    let create = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to create index");
+    assert!(create.status.success());
+
+    // Now query a k-mer that should exist
+    // simple.fa contains "ACGT" which has canonical k-mers
+    let query = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "ACGT"])
+        .output()
+        .expect("Failed to query");
+
+    assert!(query.status.success(), "Query should succeed");
+    let count: u64 = String::from_utf8_lossy(&query.stdout)
+        .trim()
+        .parse()
+        .expect("Output should be a number");
+    assert!(count > 0, "ACGT should have a count > 0");
+}
+
+#[test]
+fn cli_query_nonexistent_kmer() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // Create an index from simple.fa (small file)
+    let create = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to create index");
+    assert!(create.status.success());
+
+    // Query a k-mer that likely doesn't exist
+    let query = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "ZZZZ"])
+        .output()
+        .expect("Failed to query");
+
+    // Should fail because Z is not a valid base
+    assert!(
+        !query.status.success(),
+        "Query with invalid base should fail"
+    );
+}
+
+#[test]
+fn cli_query_wrong_length() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // Create a k=4 index
+    let create = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to create index");
+    assert!(create.status.success());
+
+    // Query with wrong k-mer length (5 instead of 4)
+    let query = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "ACGTA"])
+        .output()
+        .expect("Failed to query");
+
+    assert!(
+        !query.status.success(),
+        "Query with wrong k-mer length should fail"
+    );
+    let stderr = String::from_utf8_lossy(&query.stderr);
+    assert!(
+        stderr.contains("mismatch") || stderr.contains("length"),
+        "Should report length mismatch"
+    );
+}
+
+#[test]
+fn cli_query_case_insensitive() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // Create an index
+    let create = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to create index");
+    assert!(create.status.success());
+
+    // Query with lowercase
+    let query_lower = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "acgt"])
+        .output()
+        .expect("Failed to query");
+
+    // Query with uppercase
+    let query_upper = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "ACGT"])
+        .output()
+        .expect("Failed to query");
+
+    assert!(query_lower.status.success());
+    assert!(query_upper.status.success());
+
+    // Both should return the same count
+    let count_lower: u64 = String::from_utf8_lossy(&query_lower.stdout)
+        .trim()
+        .parse()
+        .unwrap();
+    let count_upper: u64 = String::from_utf8_lossy(&query_upper.stdout)
+        .trim()
+        .parse()
+        .unwrap();
+    assert_eq!(count_lower, count_upper, "Case should not matter");
+}
+
+#[test]
+fn cli_query_canonical_equivalence() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // Create an index
+    let create = kmerust_cmd()
+        .args([
+            "4",
+            "tests/fixtures/simple.fa",
+            "--save",
+            tmp.path().to_str().unwrap(),
+            "--quiet",
+        ])
+        .output()
+        .expect("Failed to create index");
+    assert!(create.status.success());
+
+    // Query a k-mer and its reverse complement - should give same count
+    // ACGT reverse complement is ACGT (palindrome)
+    // Let's try AAAA vs TTTT
+    let query_a = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "AAAA"])
+        .output()
+        .expect("Failed to query");
+
+    let query_t = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "TTTT"])
+        .output()
+        .expect("Failed to query");
+
+    assert!(query_a.status.success());
+    assert!(query_t.status.success());
+
+    // AAAA and TTTT are reverse complements, so should have same count
+    let count_a: u64 = String::from_utf8_lossy(&query_a.stdout)
+        .trim()
+        .parse()
+        .unwrap();
+    let count_t: u64 = String::from_utf8_lossy(&query_t.stdout)
+        .trim()
+        .parse()
+        .unwrap();
+    assert_eq!(
+        count_a, count_t,
+        "Reverse complements should have same count"
+    );
+}
+
+#[test]
+fn cli_query_invalid_index() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".kmix").unwrap();
+
+    // Write garbage to the file
+    std::fs::write(tmp.path(), b"NOT_A_VALID_INDEX_FILE").unwrap();
+
+    let query = kmerust_cmd()
+        .args(["query", tmp.path().to_str().unwrap(), "ACGT"])
+        .output()
+        .expect("Failed to query");
+
+    assert!(
+        !query.status.success(),
+        "Query on invalid index should fail"
+    );
+    let stderr = String::from_utf8_lossy(&query.stderr);
+    assert!(
+        stderr.contains("invalid") || stderr.contains("Failed"),
+        "Should report invalid index"
+    );
+}
+
+#[test]
+fn cli_query_help() {
+    let output = kmerust_cmd()
+        .args(["query", "--help"])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("index") || stdout.contains("INDEX"),
+        "Help should mention index"
+    );
+    assert!(
+        stdout.contains("kmer") || stdout.contains("KMER"),
+        "Help should mention kmer"
+    );
+}

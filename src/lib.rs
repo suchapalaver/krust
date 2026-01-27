@@ -85,6 +85,7 @@ pub mod cli;
 pub mod error;
 pub mod format;
 pub mod histogram;
+pub mod index;
 pub mod input;
 pub mod kmer;
 #[cfg(feature = "mmap")]
